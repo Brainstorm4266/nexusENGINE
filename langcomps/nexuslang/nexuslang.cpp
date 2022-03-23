@@ -8,8 +8,8 @@
 #include <time.h>
 #include <algorithm>
 #include <set>
-#include "tokenizer.h" // lexy from emkay? (used to be "lexer.h")
-#include "interpreter.h"
+#include "tokenizer.hpp" // lexy from emkay? (used to be "lexer.h")
+#include "interpreter.hpp"
 
 using namespace std;
 using namespace Tokenizer;
