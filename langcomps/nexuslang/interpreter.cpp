@@ -200,7 +200,7 @@ void Interpreter::run() {
 			if (errored) {
 				return;
 			}
-			if (!(getCurrentToken() == ")")) {
+			if (!(getLastToken() == ")")) {
 				std::cout << "ERROR: End of file before argument list end!" << endl;
 				errored = true;
 				return;
