@@ -1,2 +1,2 @@
 # nexusENGINE
-Just a little game enigne (i guess)
+Just a little game engine (i guess)
