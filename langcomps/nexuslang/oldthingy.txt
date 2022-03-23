@@ -1,0 +1,40 @@
+//strtok(Text, "\n");
+    //strtok(Text, ";");
+    string Text_String = string(Text);
+    cout << "Tokens: " << endl;
+    // establish a string and get the first token:
+    vector<string> e;
+    vector<string> v;
+    e.push_back(Text_String);
+    int ITERATION = 0;
+    int ITERATION2 = 0;
+    int LASTITR2 = 0;
+    for (int i = 0; i < sizeof(seperators) / sizeof(seperators[0]); i++) {
+        char sep = seperators[i];
+        std::cout << "SELECTED SEPERATOR: " << sep << endl;
+        //std::cout << "S=" << s << endl;
+        for (int i = 0; i < e.size(); i++) {
+            std::cout << "CURRENT e: " << e[i] << endl;
+        }
+        for (int i = 0; i < e.size(); i++) {
+            LASTITR2 = ITERATION2;
+            ITERATION2 = 0;
+            std::istringstream iss(e[i]);
+            std::string s;
+            while (std::getline(iss, s, sep)) {
+                ITERATION2++;
+                std::cout << "[" << s << "]" << std::endl;
+                e.push_back(s);
+            }
+            reverse(e.begin(), e.end());
+            s = "";
+            int ee = LASTITR2;
+            std::cout << ee << endl;
+            while (ee > 0) {
+                ee = ee - 1;
+                e.erase(e.begin());
+            }
+        }
+        ITERATION++;
+    }
+    //cout << endl << Text << endl;
