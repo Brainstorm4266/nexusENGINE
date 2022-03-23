@@ -7,16 +7,26 @@ Copyright (c) 2022 Brainstorm
   (1.1) "This License" refers to the nexus license rev. 1.
 
   (1.2) To "modify" a work means to copy from or adapt all or part of the work
-  in a fashion requiring copyright permission, other than the making of an
-  exact copy.  The resulting work is called a "modified version" of the
-  earlier work or a work "based on" the earlier work.
+    in a fashion requiring copyright permission, other than the making of an
+    exact copy.  The resulting work is called a "modified version" of the
+    earlier work or a work "based on" the earlier work.
   
   (1.3) A "covered work" means either the unmodified Program or a work based
-  on the Program.
+    on the Program.
   
   (1.4) "Executable Form" means any form of the work other than Source Code Form.
   
   (1.5) "Source Code Form" means the form of the work preferred for making modifications.
+  
+  (1.6) "You" (or "Your")
+    means an individual or a legal entity exercising rights under this
+    License. For legal entities, "You" includes any entity that
+    controls, is controlled by, or is under common control with You. For
+    purposes of this definition, "control" means (a) the power, direct
+    or indirect, to cause the direction or management of such entity,
+    whether by contract or otherwise, or (b) ownership of more than
+    fifty percent (50%) of the outstanding shares or beneficial
+    ownership of such entity.
 
 (2.1) COPYRIGHT
 Permission is hereby granted, free of charge, to any person obtaining a copy
