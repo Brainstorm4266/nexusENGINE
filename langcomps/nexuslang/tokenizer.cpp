@@ -1,5 +1,5 @@
-#include "./tokenizer.h"
-#include "./utils.h"
+#include "./tokenizer.hpp"
+#include "./utils.hpp"
 
 #include <vector>
 #include <string>
