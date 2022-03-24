@@ -34,7 +34,6 @@ struct CodeObject {
     vector<long double> numberConsts;
     vector<long long> intConsts;
 };
-class Thread;
 nObj runCode(Thread* t, CodeObject& c) { /*
 Notice: You MUST return nil at the end of code if there is a chance it wont do a return statement.
 This is not handled by this function.
