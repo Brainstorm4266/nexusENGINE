@@ -16,7 +16,8 @@ using std::vector;
 #define STRINGIFY(X) STRINGIFY2(X)
 enum InternalExceptionTypes {
     UNKNOWN,
-    MISSINGFUNC
+    MISSINGFUNC,
+    INVALIDNUMOFARGS
 };
 class _nType;
 class _nObj;
@@ -42,7 +43,9 @@ public:
     vector<nObj> objs;
     vector<InternalException> excstack;
     bool newexc = false;
-    nType basetypeclass,baseobjclass,baseexcclass;
+    nType basetypeclass;
+    nType baseobjclass;
+    nType baseexcclass;
     nObj nilnObj;
     nObj falsenObj;
     nObj truenObj;
@@ -170,14 +173,18 @@ public:
 protected:
     nObj (*v) (vanObj) = nullptr;
 };
-#define wrapnFunc(code) nTypeFuncWrap([](vanObj v) {\
+#define wrapnFunc(code,argnum) nTypeFuncWrap([](vanObj v) {\
     vector<nObj>& va = v.va;\
+    \
     MainInterpreter i = v.i;\
     if (true) code\
     return v.i->nilnobj;\
 })
 #define unerrfunc(token) wrapnFunc({\
-    InternalException ie = new _InternalException;ie->type = MISSINGFUNC;ie->excinfo = (string)"Object of type " + va[0]->nType->name + (string) (" does not support operator of type " STRINGIFY(token) ".")\
+    InternalException ie = new _InternalException;ie->type = MISSINGFUNC;ie->excinfo = (string)"Object of type " + va[0]->base->name + (string)(" does not support operator " STRINGIFY(token) ".");i->throw(ie);\
+})
+#define bierrfunc(token) wrapnFunc({\
+    InternalException ie = new _InternalException;ie->type = MISSINGFUNC;ie->excinfo = (string)"Object of type " + va[0]->base->name + (string)(" does not support operator " STRINGIFY(token) " with argument of type ") + va[1]->base->name + (string)".";i->throw(ie); \
 })
 template<typename T>
 T& avoidconstructor() {
@@ -186,8 +193,37 @@ T& avoidconstructor() {
     free(m);
     return t;
 }
-namespace BaseObjectFunctions {
-    long long inthash(nObj)
+namespace BaseObjFuncs {
+    nTypeFuncWrap add = bierrfunc("add");
+    nTypeFuncWrap sub = bierrfunc("sub");
+    nTypeFuncWrap mul = bierrfunc("mul");
+    nTypeFuncWrap div = bierrfunc("div");
+    nTypeFuncWrap pow = bierrfunc("pow");
+    nTypeFuncWrap mod = bierrfunc("mod");
+    nTypeFuncWrap iadd = bierrfunc("iadd");
+    nTypeFuncWrap isub = bierrfunc("isub");
+    nTypeFuncWrap imul = bierrfunc("imul");
+    nTypeFuncWrap idiv = bierrfunc("idiv");
+    nTypeFuncWrap ipow = bierrfunc("ipow");
+    nTypeFuncWrap imod = bierrfunc("imod");
+    nTypeFuncWrap and = bierrfunc("and");
+    nTypeFuncWrap or = bierrfunc("or");
+    nTypeFuncWrap xor = bierrfunc("xor");
+    nTypeFuncWrap inv = bierrfunc("inv");
+    nTypeFuncWrap shl = bierrfunc("shl");
+    nTypeFuncWrap shr = bierrfunc("shr");
+    nTypeFuncWrap and = bierrfunc("and");
+    nTypeFuncWrap or = bierrfunc("or");
+    nTypeFuncWrap xor = bierrfunc("xor");
+    nTypeFuncWrap inv = bierrfunc("inv");
+    nTypeFuncWrap shl = bierrfunc("shl");
+    nTypeFuncWrap shr = bierrfunc("shr");
+    nTypeFuncWrap iand = bierrfunc("iand");
+    nTypeFuncWrap ior = bierrfunc("ior");
+    nTypeFuncWrap ixor = bierrfunc("ixor");
+    nTypeFuncWrap ishl = bierrfunc("ishl");
+    nTypeFuncWrap ishr = bierrfunc("ishr");
+    
 };
 class _nType : public _nObj {
 public:
@@ -196,20 +232,32 @@ public:
     vector<nType> bases;
     nTypeFuncWrap 
     
-    add,sub,mul,div,pow,
-    iadd,isub,imul,idiv,ipow,
-    and,or,xor,inv,
-    iand,ior,ixor,
+    add,sub,mul,div,pow,mod,
+    iadd,isub,imul,idiv,ipow,imod,
+    and,or,xor,inv,shl,shr,
+    iand,ior,ixor,ishl,ishr,
     pos,neg,
     lnot,land,lor,lxor,
-    ilnot,iland,ilor,ilxor,
-    call,hash,inthash,
+    iland,ilor,ilxor,
+    call,hash,repr,
+    toint,tonum,tostr,
     newobj,initobj,delprepobj,delobj,
     getitem,setitem,length,contains,
     getattr,setattr,hasattr,dir, 
     neq,eq,lt,le,gt,ge,
     ilt,ile,igt,ige
     ;
+    static long long inthash(nObj o) {
+        o->incref();
+        vanObj v;
+        v.i = o->i;
+        v.va.push_back(o);
+        inObj h = (inObj)(o->base->hash(v));
+        long long r = h->ival;
+        h->decref();
+        o->decref();
+        return r;
+    }
     _nType(MainInterpreter i);
 };
 _nType::_nType(MainInterpreter i) : _nObj(i) {
