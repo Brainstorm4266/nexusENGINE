@@ -4,9 +4,13 @@
 #include <string>
 #include <vector>
 #include <iomanip>
+#include <sstream>
 #include <unordered_map>
+#include <algorithm>
 
 #include "__hash.hpp"
+#include "isInVector.hpp"
+#include "stringUtilities.hpp"
 
 using std::string;
 using std::vector;
@@ -31,7 +35,8 @@ class Thread;
 enum InternalExceptionTypes {
     UNKNOWN,
     MISSINGFUNC,
-    INVALIDNUMOFARGS
+    INVALIDNUMOFARGS,
+    INVALIDARG
 };
 class _InternalException {
 public:
@@ -59,6 +64,7 @@ public:
     nType intclass;
     nType strclass;
     nType numclass;
+    nType boolclass;
     nObj nilnObj;
     nObj falsenObj;
     nObj truenObj;
@@ -195,12 +201,28 @@ public:
         return nullptr;
     };
     nTypeFuncWrap() {};
-    nTypeFuncWrap(nObj (*f)(vanObj)) {
+    nTypeFuncWrap(nObj (*f)(vanObj), bool isnull = false) {
         this->v = f;
+        this->null = isnull;
     }
+    bool isNull() {
+        return this->null || this->v == nullptr;
+    };
 protected:
+    bool null = false;
     nObj (*v) (vanObj) = nullptr;
 };
+#define throwInternalException(typeexc,info,thread) if (true) {InternalException ie = new _InternalException;ie->type = typeexc;ie->excinfo = info;thread->throwerr(ie);}
+#define wrapnFunc_w_argn(code,argnum) nTypeFuncWrap([](vanObj v) {\
+    if (v.va.size() != argnum) throwInternalException(INVALIDNUMOFARGS,(string)"Expected " + std::to_string(argnum) + (string)" arguments but got " + std::to_string(v.va.size()),v.t)\
+    vector<nObj>& va = v.va;\
+    Thread* t = v.t;\
+    MainInterpreter i = v.t->i;\
+    v.init();\
+    if (true) code\
+    v.del();\
+    return i->nilnObj;\
+})
 #define wrapnFunc(code) nTypeFuncWrap([](vanObj v) {\
     vector<nObj>& va = v.va;\
     Thread* t = v.t;\
@@ -211,10 +233,10 @@ protected:
     return i->nilnObj;\
 })
 #define unerrfunc(token) wrapnFunc({\
-    InternalException ie = new _InternalException;ie->type = MISSINGFUNC;ie->excinfo = (string)"Object of type " + va[0]->base->name + (string)(" does not support operator " token ".");t->throwerr(ie);\
+    throwInternalException(MISSINGFUNC,(string)"Object of type " + va[0]->base->name + (string)(" does not support operator " token "."),t)\
 })
 #define bierrfunc(token) wrapnFunc({\
-    InternalException ie = new _InternalException;ie->type = MISSINGFUNC;ie->excinfo = (string)"Object of type " + va[0]->base->name + (string)(" does not support operator " token " with argument of type ") + va[1]->base->name + (string)".";t->throwerr(ie); \
+    throwInternalException(MISSINGFUNC,((string)"Object of type " + va[0]->base->name + (string)(" does not support operator " token " with argument of type ") + va[1]->base->name + (string)"."),t)\
 })
 template<typename T>
 T& avoidconstructor() {
@@ -228,6 +250,15 @@ public:
     string name;
     nType base = nullptr;
     vector<nType> bases;
+    vector<nType> mro;
+    void redoMRO() {
+        this->mro.clear();
+        this->mro.push_back(this);
+        for (auto i : this->bases) {
+            this->mro.insert(this->mro.end(),i->mro.begin(),i->mro.end());
+        }
+        this->mro.erase(std::unique(this->mro.begin(),this->mro.end()),this->mro.end());
+    }
     nTypeFuncWrap 
     
     add,sub,mul,div,pow,mod,
@@ -240,10 +271,11 @@ public:
     call,hash,repr,
     toint,tonum,tostr,
     newobj,initobj,delprepobj,delobj,
-    getitem,setitem,length,contains,
-    getattr,setattr,hasattr,dir,
+    getitem,setitem,length,contains,delitem,
+    getattr,setattr,hasattr,dir,delattr,
     neq,eq,lt,le,gt,ge,
-    ilt,ile,igt,ige
+    ilt,ile,igt,ige,
+    iter,next
     ;
     static long long inthash(nObj o, Thread* t) {
         vanObj v;
@@ -276,6 +308,85 @@ inline std::string ptr_to_hex( T* i )
   stream << "0x" << std::hex << i;
   return stream.str();
 }
+namespace IndexedSpecialMethods {
+    unsigned long long index(string s) {
+        switch (s.length()) {
+            case 1: return charlistToNumber(s[0]);
+            case 2: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63;
+            case 3: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63;
+            case 4: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63;
+            case 5: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63;
+            case 6: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63;
+            case 7: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63;
+            case 8: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[7]) * 63 * 63 * 63 * 63 * 63 * 63 * 63;
+            case 9: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[7]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[8]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63;
+            case 10: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[7]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[8]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[9]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63;
+            default: return -1;
+        }
+    }
+    unsigned long long add = index("add");
+    unsigned long long sub = index("sub");
+    unsigned long long mul = index("mul");
+    unsigned long long div = index("div");
+    unsigned long long pow = index("pow");
+    unsigned long long mod = index("mod");
+    unsigned long long iadd = index("iadd");
+    unsigned long long isub = index("isub");
+    unsigned long long imul = index("imul");
+    unsigned long long idiv = index("idiv");
+    unsigned long long ipow = index("ipow");
+    unsigned long long imod = index("imod");
+    unsigned long long and = index("and");
+    unsigned long long or = index("or");
+    unsigned long long xor = index("xor");
+    unsigned long long inv = index("inv");
+    unsigned long long shl = index("shl");
+    unsigned long long shr = index("shr");
+    unsigned long long iand = index("iand");
+    unsigned long long ior = index("ior");
+    unsigned long long ixor = index("ixor");
+    unsigned long long ishl = index("ishl");
+    unsigned long long ishr = index("ishr");
+    unsigned long long pos = index("pos");
+    unsigned long long neg = index("neg");
+    unsigned long long lnot = index("lnot");
+    unsigned long long land = index("land");
+    unsigned long long lor = index("lor");
+    unsigned long long lxor = index("lxor");
+    unsigned long long iland = index("iland");
+    unsigned long long ilor = index("ilor");
+    unsigned long long ilxor = index("ilxor");
+    unsigned long long call = index("call");
+    unsigned long long hash = index("hash");
+    unsigned long long repr = index("repr");
+    unsigned long long toint = index("toint");
+    unsigned long long tonum = index("tonum");
+    unsigned long long tostr = index("tostr");
+    unsigned long long newobj = index("newobj");
+    unsigned long long initobj = index("initobj");
+    unsigned long long delprepobj = index("delprepobj");
+    unsigned long long delobj = index("delobj");
+    unsigned long long delattr = index("delattr");
+    unsigned long long getattr = index("getattr");
+    unsigned long long setattr = index("setattr");
+    unsigned long long getitem = index("getitem");
+    unsigned long long setitem = index("setitem");
+    unsigned long long iter = index("iter");
+    unsigned long long next = index("next");
+    unsigned long long length = index("length");
+    unsigned long long delitem = index("delitem");
+    unsigned long long neq = index("neq");
+    unsigned long long eq = index("eq");
+    unsigned long long lt = index("lt");
+    unsigned long long gt = index("gt");
+    unsigned long long le = index("le");
+    unsigned long long ge = index("ge");
+    unsigned long long ilt = index("ilt");
+    unsigned long long igt = index("igt");
+    unsigned long long ile = index("ile");
+    unsigned long long ige = index("ige");
+
+};
 namespace BaseObjFuncs {
     nTypeFuncWrap add = bierrfunc("add");
     nTypeFuncWrap sub = bierrfunc("sub");
@@ -331,18 +442,81 @@ namespace BaseObjFuncs {
     nTypeFuncWrap tonum = unerrfunc("tonum");
     nTypeFuncWrap tostr = repr;
     nTypeFuncWrap newobj = wrapnFunc({
-        return new _nObj(i);
+        if (va.size() < 1) throwInternalException(INVALIDNUMOFARGS,"Expected 1 arguments but got 0",t);
+        if (!(va[0]->base == i->basetypeclass || isInVector(va[0]->base->bases,i->basetypeclass))) throwInternalException(INVALIDARG,"Expected argument 1 of type " + i->basetypeclass->name + " but got " + va[0]->base->name,t);
+        nObj o = new _nObj(i);
+        o->base = (nType)va[0];
+        va[0]->incref();
+        return o;
     });
     nTypeFuncWrap initobj = wrapnFunc({});
     nTypeFuncWrap delpreobj = wrapnFunc({});
     nTypeFuncWrap delobj = wrapnFunc({delete va[0];});
     nTypeFuncWrap getitem = unerrfunc("getitem");
     nTypeFuncWrap setitem = unerrfunc("setitem");
+    nTypeFuncWrap delitem = unerrfunc("delitem");
     nTypeFuncWrap length = unerrfunc("length");
     nTypeFuncWrap contains = unerrfunc("contains");
     #error getattr missing, also the other base object functions
     nTypeFuncWrap getattr = wrapnFunc({
-
+        if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
+        if (!(va[1]->base == i->strclass || isInVector(va[1]->base->bases,i->strclass))) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
+        if (startsWith(((snObj)va[1])->sval,"__") && endsWith(((snObj)va[1])->sval,"__")) {
+            using namespace IndexedSpecialMethods;
+            auto s = toLower(removeWhitespace(((snObj)va[1])->sval,"__"));
+            switch(index(s)) {
+                case add: if (!va[0]->base->add.isNull()) return add; break;
+                case sub: if (!va[0]->base->sub.isNull()) return sub; break;
+                case mul: if (!va[0]->base->mul.isNull()) return mul; break;
+                case div: if (!va[0]->base->div.isNull()) return div; break;
+                case pow: if (!va[0]->base->pow.isNull()) return pow; break;
+                case mod: if (!va[0]->base->mod.isNull()) return mod; break;
+                case iadd: if (!va[0]->base->iadd.isNull()) return iadd; break;
+                case isub: if (!va[0]->base->isub.isNull()) return isub; break;
+                case imul: if (!va[0]->base->imul.isNull()) return imul; break;
+                case idiv: if (!va[0]->base->idiv.isNull()) return idiv; break;
+                case ipow: if (!va[0]->base->ipow.isNull()) return ipow; break;
+                case imod: if (!va[0]->base->imod.isNull()) return imod; break;
+                case and: if (!va[0]->base->and.isNull()) return and; break;
+                case or: if (!va[0]->base->or.isNull()) return or; break;
+                case xor: if (!va[0]->base->xor.isNull()) return xor; break;
+                case inv: if (!va[0]->base->inv.isNull()) return inv; break;
+                case shl: if (!va[0]->base->shl.isNull()) return shl; break;
+                case shr: if (!va[0]->base->shr.isNull()) return shr; break;
+                case land: if (!va[0]->base->land.isNull()) return land; break;
+                case lor: if (!va[0]->base->lor.isNull()) return lor; break;
+                case lxor: if (!va[0]->base->lxor.isNull()) return lxor; break;
+                case iland: if (!va[0]->base->iland.isNull()) return iland; break;
+                case ilor: if (!va[0]->base->ilor.isNull()) return ilor; break;
+                case ilxor: if (!va[0]->base->ilxor.isNull()) return ilxor; break;
+                case ishl: if (!va[0]->base->ishl.isNull()) return ishl; break;
+                case ishr: if (!va[0]->base->ishr.isNull()) return ishr; break;
+                case neg: if (!va[0]->base->neg.isNull()) return neg; break;
+                case lnot: if (!va[0]->base->lnot.isNull()) return lnot; break;
+                case call: if (!va[0]->base->call.isNull()) return call; break;
+                case hash: if (!va[0]->base->hash.isNull()) return hash; break;
+                case repr: if (!va[0]->base->repr.isNull()) return repr; break;
+                case toint: if (!va[0]->base->toint.isNull()) return toint; break;
+                case tonum: if (!va[0]->base->tonum.isNull()) return tonum; break;
+                case tostr: if (!va[0]->base->tostr.isNull()) return tostr; break;
+                case newobj: if (!va[0]->base->newobj.isNull()) return newobj; break;
+                case delpreobj: if (!va[0]->base->delpreobj.isNull()) return delpreobj; break;
+                case delobj: if (!va[0]->base->delobj.isNull()) return delobj; break;
+                case getitem: if (!va[0]->base->getitem.isNull()) return getitem; break;
+                case setitem: if (!va[0]->base->setitem.isNull()) return setitem; break;
+                case delitem: if (!va[0]->base->delitem.isNull()) return delitem; break;
+                case length: if (!va[0]->base->length.isNull()) return length; break;
+                case contains: if (!va[0]->base->contains.isNull()) return contains; break;
+                case getattr: if (!va[0]->base->getattr.isNull()) return getattr; break;
+                case setattr: if (!va[0]->base->setattr.isNull()) return setattr; break;
+                case delattr: if (!va[0]->base->delattr.isNull()) return delattr; break;
+                case hasattr: if (!va[0]->base->hasattr.isNull()) return hasattr; break;
+                case dir: if (!va[0]->base->dir.isNull()) return dir; break;
+                case neq: if (!va[0]->base->neq.isNull()) return neq; break;
+                case eq: if (!va[0]->base->eq.isNull()) return eq; break;
+                       
+            }
+        }
     });
 };
 _nType::_nType(MainInterpreter i) : _nObj(i) {
