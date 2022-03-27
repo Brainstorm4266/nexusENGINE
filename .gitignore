@@ -39,3 +39,4 @@ test/*.*
 # Other stuff
 *.recipe
 *.log
+.vscode
