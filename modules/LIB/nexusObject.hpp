@@ -241,10 +241,19 @@ public:
     v.del();\
     return i->nilnObj;\
 })
-#define unerrfunc(token) wrapnFunc({\
+#define wrapnFuncnull(code) nTypeFuncWrap([](vanObj v) {\
+    vector<nObj>& va = v.va;\
+    Thread* t = v.t;\
+    MainInterpreter i = v.t->i;\
+    v.init();\
+    if (true) code\
+    v.del();\
+    return i->nilnObj;\
+},true)
+#define unerrfunc(token) wrapnFuncnull({\
     throwInternalException(MISSINGFUNC,(string)"Object of type " + va[0]->base->name + (string)(" does not support operator " token "."),t)\
 })
-#define bierrfunc(token) wrapnFunc({\
+#define bierrfunc(token) wrapnFuncnull({\
     throwInternalException(MISSINGFUNC,((string)"Object of type " + va[0]->base->name + (string)(" does not support operator " token " with argument of type ") + va[1]->base->name + (string)"."),t)\
 })
 template<typename T>
@@ -329,82 +338,81 @@ inline std::string ptr_to_hex( T* i )
   return stream.str();
 }
 namespace IndexedSpecialMethods {
-    unsigned long long index(string s) {
+    unsigned long long index(const string& s) {
         switch (s.length()) {
             case 1: return charlistToNumber(s[0]);
-            case 2: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63;
-            case 3: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63;
-            case 4: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63;
-            case 5: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63;
-            case 6: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63;
-            case 7: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63;
-            case 8: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[7]) * 63 * 63 * 63 * 63 * 63 * 63 * 63;
-            case 9: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[7]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[8]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63;
-            case 10: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 63 + charlistToNumber(s[2]) * 63 * 63 + charlistToNumber(s[3]) * 63 * 63 * 63 + charlistToNumber(s[4]) * 63 * 63 * 63 * 63 + charlistToNumber(s[5]) * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[6]) * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[7]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[8]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63 + charlistToNumber(s[9]) * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63 * 63;
+            case 2: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64;
+            case 3: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64 + charlistToNumber(s[2]) * 64 * 64;
+            case 4: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64 + charlistToNumber(s[2]) * 64 * 64 + charlistToNumber(s[3]) * 64 * 64 * 64;
+            case 5: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64 + charlistToNumber(s[2]) * 64 * 64 + charlistToNumber(s[3]) * 64 * 64 * 64 + charlistToNumber(s[4]) * 64 * 64 * 64 * 64;
+            case 6: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64 + charlistToNumber(s[2]) * 64 * 64 + charlistToNumber(s[3]) * 64 * 64 * 64 + charlistToNumber(s[4]) * 64 * 64 * 64 * 64 + charlistToNumber(s[5]) * 64 * 64 * 64 * 64 * 64;
+            case 7: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64 + charlistToNumber(s[2]) * 64 * 64 + charlistToNumber(s[3]) * 64 * 64 * 64 + charlistToNumber(s[4]) * 64 * 64 * 64 * 64 + charlistToNumber(s[5]) * 64 * 64 * 64 * 64 * 64 + charlistToNumber(s[6]) * 64 * 64 * 64 * 64 * 64 * 64;
+            case 8: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64 + charlistToNumber(s[2]) * 64 * 64 + charlistToNumber(s[3]) * 64 * 64 * 64 + charlistToNumber(s[4]) * 64 * 64 * 64 * 64 + charlistToNumber(s[5]) * 64 * 64 * 64 * 64 * 64 + charlistToNumber(s[6]) * 64 * 64 * 64 * 64 * 64 * 64 + charlistToNumber(s[7]) * 64 * 64 * 64 * 64 * 64 * 64 * 64;
+            case 9: return charlistToNumber(s[0]) + charlistToNumber(s[1]) * 64 + charlistToNumber(s[2]) * 64 * 64 + charlistToNumber(s[3]) * 64 * 64 * 64 + charlistToNumber(s[4]) * 64 * 64 * 64 * 64 + charlistToNumber(s[5]) * 64 * 64 * 64 * 64 * 64 + charlistToNumber(s[6]) * 64 * 64 * 64 * 64 * 64 * 64 + charlistToNumber(s[7]) * 64 * 64 * 64 * 64 * 64 * 64 * 64 + charlistToNumber(s[8]) * 64 * 64 * 64 * 64 * 64 * 64 * 64 * 64;
             default: return -1;
         }
     }
-    unsigned long long add = index("add");
-    unsigned long long sub = index("sub");
-    unsigned long long mul = index("mul");
-    unsigned long long div = index("div");
-    unsigned long long pow = index("pow");
-    unsigned long long mod = index("mod");
-    unsigned long long iadd = index("iadd");
-    unsigned long long isub = index("isub");
-    unsigned long long imul = index("imul");
-    unsigned long long idiv = index("idiv");
-    unsigned long long ipow = index("ipow");
-    unsigned long long imod = index("imod");
-    unsigned long long andf = index("and");
-    unsigned long long orf = index("or");
-    unsigned long long xorf = index("xor");
-    unsigned long long inv = index("inv");
-    unsigned long long shl = index("shl");
-    unsigned long long shr = index("shr");
-    unsigned long long iand = index("iand");
-    unsigned long long ior = index("ior");
-    unsigned long long ixor = index("ixor");
-    unsigned long long ishl = index("ishl");
-    unsigned long long ishr = index("ishr");
-    unsigned long long pos = index("pos");
-    unsigned long long neg = index("neg");
-    unsigned long long lnot = index("lnot");
-    unsigned long long land = index("land");
-    unsigned long long lor = index("lor");
-    unsigned long long lxor = index("lxor");
-    unsigned long long iland = index("iland");
-    unsigned long long ilor = index("ilor");
-    unsigned long long ilxor = index("ilxor");
-    unsigned long long call = index("call");
-    unsigned long long hash = index("hash");
-    unsigned long long repr = index("repr");
-    unsigned long long toint = index("toint");
-    unsigned long long tonum = index("tonum");
-    unsigned long long tostr = index("tostr");
-    unsigned long long newobj = index("newobj");
-    unsigned long long initobj = index("initobj");
-    unsigned long long delprepobj = index("delprepobj");
-    unsigned long long delobj = index("delobj");
-    unsigned long long delattr = index("delattr");
-    unsigned long long getattr = index("getattr");
-    unsigned long long setattr = index("setattr");
-    unsigned long long getitem = index("getitem");
-    unsigned long long setitem = index("setitem");
-    unsigned long long iter = index("iter");
-    unsigned long long next = index("next");
-    unsigned long long length = index("length");
-    unsigned long long delitem = index("delitem");
-    unsigned long long neq = index("neq");
-    unsigned long long eq = index("eq");
-    unsigned long long lt = index("lt");
-    unsigned long long gt = index("gt");
-    unsigned long long le = index("le");
-    unsigned long long ge = index("ge");
-    unsigned long long ilt = index("ilt");
-    unsigned long long igt = index("igt");
-    unsigned long long ile = index("ile");
-    unsigned long long ige = index("ige");
+    const unsigned long long add = index("add");
+    const unsigned long long sub = index("sub");
+    const unsigned long long mul = index("mul");
+    const unsigned long long div = index("div");
+    const unsigned long long pow = index("pow");
+    const unsigned long long mod = index("mod");
+    const unsigned long long iadd = index("iadd");
+    const unsigned long long isub = index("isub");
+    const unsigned long long imul = index("imul");
+    const unsigned long long idiv = index("idiv");
+    const unsigned long long ipow = index("ipow");
+    const unsigned long long imod = index("imod");
+    const unsigned long long andf = index("and");
+    const unsigned long long orf = index("or");
+    const unsigned long long xorf = index("xor");
+    const unsigned long long inv = index("inv");
+    const unsigned long long shl = index("shl");
+    const unsigned long long shr = index("shr");
+    const unsigned long long iand = index("iand");
+    const unsigned long long ior = index("ior");
+    const unsigned long long ixor = index("ixor");
+    const unsigned long long ishl = index("ishl");
+    const unsigned long long ishr = index("ishr");
+    const unsigned long long pos = index("pos");
+    const unsigned long long neg = index("neg");
+    const unsigned long long lnot = index("lnot");
+    const unsigned long long land = index("land");
+    const unsigned long long lor = index("lor");
+    const unsigned long long lxor = index("lxor");
+    const unsigned long long iland = index("iland");
+    const unsigned long long ilor = index("ilor");
+    const unsigned long long ilxor = index("ilxor");
+    const unsigned long long call = index("call");
+    const unsigned long long hash = index("hash");
+    const unsigned long long repr = index("repr");
+    const unsigned long long toint = index("toint");
+    const unsigned long long tonum = index("tonum");
+    const unsigned long long tostr = index("tostr");
+    const unsigned long long newobj = index("newobj");
+    const unsigned long long initobj = index("initobj");
+    const unsigned long long delprepobj = index("delprepobj");
+    const unsigned long long delobj = index("delobj");
+    const unsigned long long delattr = index("delattr");
+    const unsigned long long getattr = index("getattr");
+    const unsigned long long setattr = index("setattr");
+    const unsigned long long getitem = index("getitem");
+    const unsigned long long setitem = index("setitem");
+    const unsigned long long iter = index("iter");
+    const unsigned long long next = index("next");
+    const unsigned long long length = index("length");
+    const unsigned long long delitem = index("delitem");
+    const unsigned long long neq = index("neq");
+    const unsigned long long eq = index("eq");
+    const unsigned long long lt = index("lt");
+    const unsigned long long gt = index("gt");
+    const unsigned long long le = index("le");
+    const unsigned long long ge = index("ge");
+    const unsigned long long ilt = index("ilt");
+    const unsigned long long igt = index("igt");
+    const unsigned long long ile = index("ile");
+    const unsigned long long ige = index("ige");
 
 };
 namespace BaseObjFuncs {
@@ -474,7 +482,7 @@ namespace BaseObjFuncs {
     #error getattr missing, also the other base object functions
 #define __rungetattrfunc_internal_(obj,name) if (true) {\
     using namespace IndexedSpecialMethods;\
-    switch (index(name)){\
+    switch ((const unsigned long long)index(name)){\
         case add:if (!obj->add.isNull()) return obj->add; break;\
         case sub:if (!obj->sub.isNull()) return obj->sub; break;\
         case mul:if (!obj->mul.isNull()) return obj->mul; break;\
@@ -540,7 +548,7 @@ namespace BaseObjFuncs {
         default:break;\
     }\
 }
-    nTypeFuncWrap getattr = wrapnFunc({
+    nTypeFuncWrap getattr = /*wrapnFunc({
         if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
         if (!(va[1]->base == i->strclass || isInVector(va[1]->base->bases,i->strclass))) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
         //ok
@@ -549,9 +557,166 @@ namespace BaseObjFuncs {
         if (isSpecialMethod) attrname = removeLeadingWhitespace(removeLeadingWhitespace(attrname,"__"),"__");
         bool isType = (va[0]->base == i->basetypeclass || isInVector(va[0]->base->bases,i->basetypeclass));
         if (isSpecialMethod && isType) {
-
+            //__rungetattrfunc_internal_(va[0],attrname);
+            if (true) {\
+                using namespace IndexedSpecialMethods;\
+                switch (index((const string&)attrname)){\
+                    case add:if (!obj->add.isNull()) return obj->add; break;\
+                    case sub:if (!obj->sub.isNull()) return obj->sub; break;\
+                    case mul:if (!obj->mul.isNull()) return obj->mul; break;\
+                    case div:if (!obj->div.isNull()) return obj->div; break;\
+                    case pow:if (!obj->pow.isNull()) return obj->pow; break;\
+                    case mod:if (!obj->mod.isNull()) return obj->mod; break;\
+                    case iadd:if (!obj->iadd.isNull()) return obj->iadd; break;\
+                    case isub:if (!obj->isub.isNull()) return obj->isub; break;\
+                    case imul:if (!obj->imul.isNull()) return obj->imul; break;\
+                    case idiv:if (!obj->idiv.isNull()) return obj->idiv; break;\
+                    case ipow:if (!obj->ipow.isNull()) return obj->ipow; break;\
+                    case imod:if (!obj->imod.isNull()) return obj->imod; break;\
+                    case andf:if (!obj->andf.isNull()) return obj->andf; break;\
+                    case orf:if (!obj->orf.isNull()) return obj->orf; break;\
+                    case xorf:if (!obj->xorf.isNull()) return obj->xorf; break;\
+                    case inv:if (!obj->inv.isNull()) return obj->inv; break;\
+                    case shl:if (!obj->shl.isNull()) return obj->shl; break;\
+                    case shr:if (!obj->shr.isNull()) return obj->shr; break;\
+                    case iand:if (!obj->iand.isNull()) return obj->iand; break;\
+                    case ior:if (!obj->ior.isNull()) return obj->ior; break;\
+                    case ixor:if (!obj->ixor.isNull()) return obj->ixor; break;\
+                    case ishl:if (!obj->ishl.isNull()) return obj->ishl; break;\
+                    case ishr:if (!obj->ishr.isNull()) return obj->ishr; break;\
+                    case pos:if (!obj->pos.isNull()) return obj->pos; break;\
+                    case neg:if (!obj->neg.isNull()) return obj->neg; break;\
+                    case lnot:if (!obj->lnot.isNull()) return obj->lnot; break;\
+                    case land:if (!obj->land.isNull()) return obj->land; break;\
+                    case lor:if (!obj->lor.isNull()) return obj->lor; break;\
+                    case lxor:if (!obj->lxor.isNull()) return obj->lxor; break;\
+                    case iland:if (!obj->iland.isNull()) return obj->iland; break;\
+                    case ilor:if (!obj->ilor.isNull()) return obj->ilor; break;\
+                    case ilxor:if (!obj->ilxor.isNull()) return obj->ilxor; break;\
+                    case call:if (!obj->call.isNull()) return obj->call; break;\
+                    case hash:if (!obj->hash.isNull()) return obj->hash; break;\
+                    case repr:if (!obj->repr.isNull()) return obj->repr; break;\
+                    case toint:if (!obj->toint.isNull()) return obj->toint; break;\
+                    case tonum:if (!obj->tonum.isNull()) return obj->tonum; break;\
+                    case tostr:if (!obj->tostr.isNull()) return obj->tostr; break;\
+                    case newobj:if (!obj->newobj.isNull()) return obj->newobj; break;\
+                    case initobj:if (!obj->initobj.isNull()) return obj->initobj; break;\
+                    case delpreobj:if (!obj->delpreobj.isNull()) return obj->delpreobj; break;\
+                    case delobj:if (!obj->delobj.isNull()) return obj->delobj; break;\
+                    case delattr:if (!obj->delattr.isNull()) return obj->delattr; break;\
+                    case getattr:if (!obj->getattr.isNull()) return obj->getattr; break;\
+                    case setattr:if (!obj->setattr.isNull()) return obj->setattr; break;\
+                    case getitem:if (!obj->getitem.isNull()) return obj->getitem; break;\
+                    case setitem:if (!obj->setitem.isNull()) return obj->setitem; break;\
+                    case delitem:if (!obj->delitem.isNull()) return obj->delitem; break;\
+                    case length:if (!obj->length.isNull()) return obj->length; break;\
+                    case contains:if (!obj->contains.isNull()) return obj->contains; break;\
+                    case iter:if (!obj->iter.isNull()) return obj->iter; break;\
+                    case next:if (!obj->next.isNull()) return obj->next; break;\
+                    case neq:if (!obj->neq.isNull()) return obj->neq; break;\
+                    case eq:if (!obj->eq.isNull()) return obj->eq; break;\
+                    case lt:if (!obj->lt.isNull()) return obj->lt; break;\
+                    case le:if (!obj->le.isNull()) return obj->le; break;\
+                    case gt:if (!obj->gt.isNull()) return obj->gt; break;\
+                    case ge:if (!obj->ge.isNull()) return obj->ge; break;\
+                    case ilt:if (!obj->ilt.isNull()) return obj->ilt; break;\
+                    case ile:if (!obj->ile.isNull()) return obj->ile; break;\
+                    case igt:if (!obj->igt.isNull()) return obj->igt; break;\
+                    case ige:if (!obj->ige.isNull()) return obj->ige; break;\
+                    default:break;\
+            
+                }\
+            }
         }
-    });
+    });*/nTypeFuncWrap([](vanObj v) {\
+        vector<nObj>& va = v.va;\
+        Thread* t = v.t;\
+        MainInterpreter i = v.t->i;\
+        v.init();\
+        if (true) {
+        if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
+        if (!(va[1]->base == i->strclass || isInVector(va[1]->base->bases,i->strclass))) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
+        //ok
+        bool isSpecialMethod = (startsWith(((snObj)(va[1]))->sval,"__") && endsWith(((snObj)(va[1]))->sval,"__"));
+        string attrname = ((snObj)(va[1]))->sval;
+        if (isSpecialMethod) attrname = removeLeadingWhitespace(removeLeadingWhitespace(attrname,"__"),"__");
+        bool isType = (va[0]->base == i->basetypeclass || isInVector(va[0]->base->bases,i->basetypeclass));
+        if (isSpecialMethod && isType) {
+            //__rungetattrfunc_internal_(va[0],attrname);
+            if (true) {\
+                using namespace IndexedSpecialMethods;\
+                switch (index((const string&)attrname)){\
+                    case IndexedSpecialMethods::add:if (!obj->add.isNull()) return obj->add; break;\
+                    case IndexedSpecialMethods::sub:if (!obj->sub.isNull()) return obj->sub; break;\
+                    case IndexedSpecialMethods::mul:if (!obj->mul.isNull()) return obj->mul; break;\
+                    case IndexedSpecialMethods::div:if (!obj->div.isNull()) return obj->div; break;\
+                    case IndexedSpecialMethods::pow:if (!obj->pow.isNull()) return obj->pow; break;\
+                    case IndexedSpecialMethods::mod:if (!obj->mod.isNull()) return obj->mod; break;\
+                    case IndexedSpecialMethods::iadd:if (!obj->iadd.isNull()) return obj->iadd; break;\
+                    case IndexedSpecialMethods::isub:if (!obj->isub.isNull()) return obj->isub; break;\
+                    case IndexedSpecialMethods::imul:if (!obj->imul.isNull()) return obj->imul; break;\
+                    case IndexedSpecialMethods::idiv:if (!obj->idiv.isNull()) return obj->idiv; break;\
+                    case IndexedSpecialMethods::ipow:if (!obj->ipow.isNull()) return obj->ipow; break;\
+                    case IndexedSpecialMethods::imod:if (!obj->imod.isNull()) return obj->imod; break;\
+                    case IndexedSpecialMethods::andf:if (!obj->andf.isNull()) return obj->andf; break;\
+                    case IndexedSpecialMethods::orf:if (!obj->orf.isNull()) return obj->orf; break;\
+                    case IndexedSpecialMethods::xorf:if (!obj->xorf.isNull()) return obj->xorf; break;\
+                    case IndexedSpecialMethods::inv:if (!obj->inv.isNull()) return obj->inv; break;\
+                    case IndexedSpecialMethods::shl:if (!obj->shl.isNull()) return obj->shl; break;\
+                    case IndexedSpecialMethods::shr:if (!obj->shr.isNull()) return obj->shr; break;\
+                    case IndexedSpecialMethods::iand:if (!obj->iand.isNull()) return obj->iand; break;\
+                    case IndexedSpecialMethods::ior:if (!obj->ior.isNull()) return obj->ior; break;\
+                    case IndexedSpecialMethods::ixor:if (!obj->ixor.isNull()) return obj->ixor; break;\
+                    case IndexedSpecialMethods::ishl:if (!obj->ishl.isNull()) return obj->ishl; break;\
+                    case IndexedSpecialMethods::ishr:if (!obj->ishr.isNull()) return obj->ishr; break;\
+                    case IndexedSpecialMethods::pos:if (!obj->pos.isNull()) return obj->pos; break;\
+                    case IndexedSpecialMethods::neg:if (!obj->neg.isNull()) return obj->neg; break;\
+                    case IndexedSpecialMethods::lnot:if (!obj->lnot.isNull()) return obj->lnot; break;\
+                    case IndexedSpecialMethods::land:if (!obj->land.isNull()) return obj->land; break;\
+                    case IndexedSpecialMethods::lor:if (!obj->lor.isNull()) return obj->lor; break;\
+                    case IndexedSpecialMethods::lxor:if (!obj->lxor.isNull()) return obj->lxor; break;\
+                    case IndexedSpecialMethods::iland:if (!obj->iland.isNull()) return obj->iland; break;\
+                    case IndexedSpecialMethods::ilor:if (!obj->ilor.isNull()) return obj->ilor; break;\
+                    case IndexedSpecialMethods::ilxor:if (!obj->ilxor.isNull()) return obj->ilxor; break;\
+                    case IndexedSpecialMethods::call:if (!obj->call.isNull()) return obj->call; break;\
+                    case IndexedSpecialMethods::hash:if (!obj->hash.isNull()) return obj->hash; break;\
+                    case IndexedSpecialMethods::repr:if (!obj->repr.isNull()) return obj->repr; break;\
+                    case IndexedSpecialMethods::toint:if (!obj->toint.isNull()) return obj->toint; break;\
+                    case IndexedSpecialMethods::tonum:if (!obj->tonum.isNull()) return obj->tonum; break;\
+                    case IndexedSpecialMethods::tostr:if (!obj->tostr.isNull()) return obj->tostr; break;\
+                    case IndexedSpecialMethods::newobj:if (!obj->newobj.isNull()) return obj->newobj; break;\
+                    case IndexedSpecialMethods::initobj:if (!obj->initobj.isNull()) return obj->initobj; break;\
+                    case IndexedSpecialMethods::delpreobj:if (!obj->delpreobj.isNull()) return obj->delpreobj; break;\
+                    case IndexedSpecialMethods::delobj:if (!obj->delobj.isNull()) return obj->delobj; break;\
+                    case IndexedSpecialMethods::delattr:if (!obj->delattr.isNull()) return obj->delattr; break;\
+                    case IndexedSpecialMethods::getattr:if (!obj->getattr.isNull()) return obj->getattr; break;\
+                    case IndexedSpecialMethods::setattr:if (!obj->setattr.isNull()) return obj->setattr; break;\
+                    case IndexedSpecialMethods::getitem:if (!obj->getitem.isNull()) return obj->getitem; break;\
+                    case IndexedSpecialMethods::setitem:if (!obj->setitem.isNull()) return obj->setitem; break;\
+                    case IndexedSpecialMethods::delitem:if (!obj->delitem.isNull()) return obj->delitem; break;\
+                    case IndexedSpecialMethods::length:if (!obj->length.isNull()) return obj->length; break;\
+                    case IndexedSpecialMethods::contains:if (!obj->contains.isNull()) return obj->contains; break;\
+                    case IndexedSpecialMethods::iter:if (!obj->iter.isNull()) return obj->iter; break;\
+                    case IndexedSpecialMethods::next:if (!obj->next.isNull()) return obj->next; break;\
+                    case IndexedSpecialMethods::neq:if (!obj->neq.isNull()) return obj->neq; break;\
+                    case IndexedSpecialMethods::eq:if (!obj->eq.isNull()) return obj->eq; break;\
+                    case IndexedSpecialMethods::lt:if (!obj->lt.isNull()) return obj->lt; break;\
+                    case IndexedSpecialMethods::le:if (!obj->le.isNull()) return obj->le; break;\
+                    case IndexedSpecialMethods::gt:if (!obj->gt.isNull()) return obj->gt; break;\
+                    case IndexedSpecialMethods::ge:if (!obj->ge.isNull()) return obj->ge; break;\
+                    case IndexedSpecialMethods::ilt:if (!obj->ilt.isNull()) return obj->ilt; break;\
+                    case IndexedSpecialMethods::ile:if (!obj->ile.isNull()) return obj->ile; break;\
+                    case IndexedSpecialMethods::igt:if (!obj->igt.isNull()) return obj->igt; break;\
+                    case IndexedSpecialMethods::ige:if (!obj->ige.isNull()) return obj->ige; break;\
+                    default:break;\
+            
+                }\
+            }
+        }
+    }\
+        v.del();\
+        return i->nilnObj;\
+    })
 };
 _nType::_nType(MainInterpreter i) : _nObj(i) {
     this->base = i->basetypeclass;
