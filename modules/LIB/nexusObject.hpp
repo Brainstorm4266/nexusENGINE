@@ -65,6 +65,7 @@ public:
     nType strclass;
     nType numclass;
     nType boolclass;
+    nType funcclass;
     nObj nilnObj;
     nObj falsenObj;
     nObj truenObj;
@@ -209,8 +210,16 @@ public:
         return this->null || this->v == nullptr;
     };
 protected:
-    bool null = false;
+    bool null = true;
     nObj (*v) (vanObj) = nullptr;
+};
+class _funcnObj : public _nObj {
+public:
+    _funcnObj(MainInterpreter i) : _nObj(i) {this->base = i->funcclass;};
+    nTypeFuncWrap f;
+    bool isNull() {
+        return this->f.isNull();
+    };
 };
 #define throwInternalException(typeexc,info,thread) if (true) {InternalException ie = new _InternalException;ie->type = typeexc;ie->excinfo = info;thread->throwerr(ie);}
 #define wrapnFunc_w_argn(code,argnum) nTypeFuncWrap([](vanObj v) {\
@@ -263,7 +272,7 @@ public:
     
     add,sub,mul,div,pow,mod,
     iadd,isub,imul,idiv,ipow,imod,
-    and,or,xor,inv,shl,shr,
+    andf,orf,xorf,inv,shl,shr,
     iand,ior,ixor,ishl,ishr,
     pos,neg,
     lnot,land,lor,lxor,
@@ -284,6 +293,17 @@ public:
         inObj h = (inObj)(o->base->hash(v));
         long long r = h->ival;
         h->decref();
+        return r;
+    }
+    nObj intgetattr(nObj o, string attr, Thread* t) {
+        vanObj v;
+        v.t = t;
+        v.va.push_back(o);
+        snObj s = new _snObj(this->i);
+        s->sval = attr;
+        v.va.push_back(s);
+        nObj r = o->base->getattr(v);
+        s->decref();
         return r;
     }
     _nType(MainInterpreter i);
@@ -336,9 +356,9 @@ namespace IndexedSpecialMethods {
     unsigned long long idiv = index("idiv");
     unsigned long long ipow = index("ipow");
     unsigned long long imod = index("imod");
-    unsigned long long and = index("and");
-    unsigned long long or = index("or");
-    unsigned long long xor = index("xor");
+    unsigned long long andf = index("and");
+    unsigned long long orf = index("or");
+    unsigned long long xorf = index("xor");
     unsigned long long inv = index("inv");
     unsigned long long shl = index("shl");
     unsigned long long shr = index("shr");
@@ -400,15 +420,9 @@ namespace BaseObjFuncs {
     nTypeFuncWrap idiv = bierrfunc("idiv");
     nTypeFuncWrap ipow = bierrfunc("ipow");
     nTypeFuncWrap imod = bierrfunc("imod");
-    nTypeFuncWrap and = bierrfunc("and");
-    nTypeFuncWrap or = bierrfunc("or");
-    nTypeFuncWrap xor = bierrfunc("xor");
-    nTypeFuncWrap inv = bierrfunc("inv");
-    nTypeFuncWrap shl = bierrfunc("shl");
-    nTypeFuncWrap shr = bierrfunc("shr");
-    nTypeFuncWrap and = bierrfunc("and");
-    nTypeFuncWrap or = bierrfunc("or");
-    nTypeFuncWrap xor = bierrfunc("xor");
+    nTypeFuncWrap andf = bierrfunc("and");
+    nTypeFuncWrap orf = bierrfunc("or");
+    nTypeFuncWrap xorf = bierrfunc("xor");
     nTypeFuncWrap inv = bierrfunc("inv");
     nTypeFuncWrap shl = bierrfunc("shl");
     nTypeFuncWrap shr = bierrfunc("shr");
@@ -458,64 +472,84 @@ namespace BaseObjFuncs {
     nTypeFuncWrap length = unerrfunc("length");
     nTypeFuncWrap contains = unerrfunc("contains");
     #error getattr missing, also the other base object functions
+#define __rungetattrfunc_internal_(obj,name) if (true) {\
+    using namespace IndexedSpecialMethods;\
+    switch (index(name)){\
+        case add:if (!obj->add.isNull()) return obj->add; break;\
+        case sub:if (!obj->sub.isNull()) return obj->sub; break;\
+        case mul:if (!obj->mul.isNull()) return obj->mul; break;\
+        case div:if (!obj->div.isNull()) return obj->div; break;\
+        case pow:if (!obj->pow.isNull()) return obj->pow; break;\
+        case mod:if (!obj->mod.isNull()) return obj->mod; break;\
+        case iadd:if (!obj->iadd.isNull()) return obj->iadd; break;\
+        case isub:if (!obj->isub.isNull()) return obj->isub; break;\
+        case imul:if (!obj->imul.isNull()) return obj->imul; break;\
+        case idiv:if (!obj->idiv.isNull()) return obj->idiv; break;\
+        case ipow:if (!obj->ipow.isNull()) return obj->ipow; break;\
+        case imod:if (!obj->imod.isNull()) return obj->imod; break;\
+        case andf:if (!obj->andf.isNull()) return obj->andf; break;\
+        case orf:if (!obj->orf.isNull()) return obj->orf; break;\
+        case xorf:if (!obj->xorf.isNull()) return obj->xorf; break;\
+        case inv:if (!obj->inv.isNull()) return obj->inv; break;\
+        case shl:if (!obj->shl.isNull()) return obj->shl; break;\
+        case shr:if (!obj->shr.isNull()) return obj->shr; break;\
+        case iand:if (!obj->iand.isNull()) return obj->iand; break;\
+        case ior:if (!obj->ior.isNull()) return obj->ior; break;\
+        case ixor:if (!obj->ixor.isNull()) return obj->ixor; break;\
+        case ishl:if (!obj->ishl.isNull()) return obj->ishl; break;\
+        case ishr:if (!obj->ishr.isNull()) return obj->ishr; break;\
+        case pos:if (!obj->pos.isNull()) return obj->pos; break;\
+        case neg:if (!obj->neg.isNull()) return obj->neg; break;\
+        case lnot:if (!obj->lnot.isNull()) return obj->lnot; break;\
+        case land:if (!obj->land.isNull()) return obj->land; break;\
+        case lor:if (!obj->lor.isNull()) return obj->lor; break;\
+        case lxor:if (!obj->lxor.isNull()) return obj->lxor; break;\
+        case iland:if (!obj->iland.isNull()) return obj->iland; break;\
+        case ilor:if (!obj->ilor.isNull()) return obj->ilor; break;\
+        case ilxor:if (!obj->ilxor.isNull()) return obj->ilxor; break;\
+        case call:if (!obj->call.isNull()) return obj->call; break;\
+        case hash:if (!obj->hash.isNull()) return obj->hash; break;\
+        case repr:if (!obj->repr.isNull()) return obj->repr; break;\
+        case toint:if (!obj->toint.isNull()) return obj->toint; break;\
+        case tonum:if (!obj->tonum.isNull()) return obj->tonum; break;\
+        case tostr:if (!obj->tostr.isNull()) return obj->tostr; break;\
+        case newobj:if (!obj->newobj.isNull()) return obj->newobj; break;\
+        case initobj:if (!obj->initobj.isNull()) return obj->initobj; break;\
+        case delpreobj:if (!obj->delpreobj.isNull()) return obj->delpreobj; break;\
+        case delobj:if (!obj->delobj.isNull()) return obj->delobj; break;\
+        case delattr:if (!obj->delattr.isNull()) return obj->delattr; break;\
+        case getattr:if (!obj->getattr.isNull()) return obj->getattr; break;\
+        case setattr:if (!obj->setattr.isNull()) return obj->setattr; break;\
+        case getitem:if (!obj->getitem.isNull()) return obj->getitem; break;\
+        case setitem:if (!obj->setitem.isNull()) return obj->setitem; break;\
+        case delitem:if (!obj->delitem.isNull()) return obj->delitem; break;\
+        case length:if (!obj->length.isNull()) return obj->length; break;\
+        case contains:if (!obj->contains.isNull()) return obj->contains; break;\
+        case iter:if (!obj->iter.isNull()) return obj->iter; break;\
+        case next:if (!obj->next.isNull()) return obj->next; break;\
+        case neq:if (!obj->neq.isNull()) return obj->neq; break;\
+        case eq:if (!obj->eq.isNull()) return obj->eq; break;\
+        case lt:if (!obj->lt.isNull()) return obj->lt; break;\
+        case le:if (!obj->le.isNull()) return obj->le; break;\
+        case gt:if (!obj->gt.isNull()) return obj->gt; break;\
+        case ge:if (!obj->ge.isNull()) return obj->ge; break;\
+        case ilt:if (!obj->ilt.isNull()) return obj->ilt; break;\
+        case ile:if (!obj->ile.isNull()) return obj->ile; break;\
+        case igt:if (!obj->igt.isNull()) return obj->igt; break;\
+        case ige:if (!obj->ige.isNull()) return obj->ige; break;\
+        default:break;\
+    }\
+}
     nTypeFuncWrap getattr = wrapnFunc({
         if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
         if (!(va[1]->base == i->strclass || isInVector(va[1]->base->bases,i->strclass))) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
-        if (startsWith(((snObj)va[1])->sval,"__") && endsWith(((snObj)va[1])->sval,"__")) {
-            using namespace IndexedSpecialMethods;
-            auto s = toLower(removeWhitespace(((snObj)va[1])->sval,"__"));
-            switch(index(s)) {
-                case add: if (!va[0]->base->add.isNull()) return add; break;
-                case sub: if (!va[0]->base->sub.isNull()) return sub; break;
-                case mul: if (!va[0]->base->mul.isNull()) return mul; break;
-                case div: if (!va[0]->base->div.isNull()) return div; break;
-                case pow: if (!va[0]->base->pow.isNull()) return pow; break;
-                case mod: if (!va[0]->base->mod.isNull()) return mod; break;
-                case iadd: if (!va[0]->base->iadd.isNull()) return iadd; break;
-                case isub: if (!va[0]->base->isub.isNull()) return isub; break;
-                case imul: if (!va[0]->base->imul.isNull()) return imul; break;
-                case idiv: if (!va[0]->base->idiv.isNull()) return idiv; break;
-                case ipow: if (!va[0]->base->ipow.isNull()) return ipow; break;
-                case imod: if (!va[0]->base->imod.isNull()) return imod; break;
-                case and: if (!va[0]->base->and.isNull()) return and; break;
-                case or: if (!va[0]->base->or.isNull()) return or; break;
-                case xor: if (!va[0]->base->xor.isNull()) return xor; break;
-                case inv: if (!va[0]->base->inv.isNull()) return inv; break;
-                case shl: if (!va[0]->base->shl.isNull()) return shl; break;
-                case shr: if (!va[0]->base->shr.isNull()) return shr; break;
-                case land: if (!va[0]->base->land.isNull()) return land; break;
-                case lor: if (!va[0]->base->lor.isNull()) return lor; break;
-                case lxor: if (!va[0]->base->lxor.isNull()) return lxor; break;
-                case iland: if (!va[0]->base->iland.isNull()) return iland; break;
-                case ilor: if (!va[0]->base->ilor.isNull()) return ilor; break;
-                case ilxor: if (!va[0]->base->ilxor.isNull()) return ilxor; break;
-                case ishl: if (!va[0]->base->ishl.isNull()) return ishl; break;
-                case ishr: if (!va[0]->base->ishr.isNull()) return ishr; break;
-                case neg: if (!va[0]->base->neg.isNull()) return neg; break;
-                case lnot: if (!va[0]->base->lnot.isNull()) return lnot; break;
-                case call: if (!va[0]->base->call.isNull()) return call; break;
-                case hash: if (!va[0]->base->hash.isNull()) return hash; break;
-                case repr: if (!va[0]->base->repr.isNull()) return repr; break;
-                case toint: if (!va[0]->base->toint.isNull()) return toint; break;
-                case tonum: if (!va[0]->base->tonum.isNull()) return tonum; break;
-                case tostr: if (!va[0]->base->tostr.isNull()) return tostr; break;
-                case newobj: if (!va[0]->base->newobj.isNull()) return newobj; break;
-                case delpreobj: if (!va[0]->base->delpreobj.isNull()) return delpreobj; break;
-                case delobj: if (!va[0]->base->delobj.isNull()) return delobj; break;
-                case getitem: if (!va[0]->base->getitem.isNull()) return getitem; break;
-                case setitem: if (!va[0]->base->setitem.isNull()) return setitem; break;
-                case delitem: if (!va[0]->base->delitem.isNull()) return delitem; break;
-                case length: if (!va[0]->base->length.isNull()) return length; break;
-                case contains: if (!va[0]->base->contains.isNull()) return contains; break;
-                case getattr: if (!va[0]->base->getattr.isNull()) return getattr; break;
-                case setattr: if (!va[0]->base->setattr.isNull()) return setattr; break;
-                case delattr: if (!va[0]->base->delattr.isNull()) return delattr; break;
-                case hasattr: if (!va[0]->base->hasattr.isNull()) return hasattr; break;
-                case dir: if (!va[0]->base->dir.isNull()) return dir; break;
-                case neq: if (!va[0]->base->neq.isNull()) return neq; break;
-                case eq: if (!va[0]->base->eq.isNull()) return eq; break;
-                       
-            }
+        //ok
+        bool isSpecialMethod = (startsWith(((snObj)(va[1]))->sval,"__") && endsWith(((snObj)(va[1]))->sval,"__"));
+        string attrname = ((snObj)(va[1]))->sval;
+        if (isSpecialMethod) attrname = removeLeadingWhitespace(removeLeadingWhitespace(attrname,"__"),"__");
+        bool isType = (va[0]->base == i->basetypeclass || isInVector(va[0]->base->bases,i->basetypeclass));
+        if (isSpecialMethod && isType) {
+
         }
     });
 };
