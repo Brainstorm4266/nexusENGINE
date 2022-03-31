@@ -82,6 +82,7 @@ public:
     nType funcclass;
     nType dictclass;
     nType threadclass;
+    nType listclass;
     nObj nilnObj;
     nObj falsenObj;
     nObj truenObj;
@@ -179,11 +180,22 @@ public:
     _nnObj(MainInterpreter i) : _nObj(i) {this->base = i->numclass;reinterpret_cast<nObj>(this->base)->incref();};
     long double nval = 0;
 };
+struct dictkey {
+    string key;
+    unsigned long long v;
+    static dictkey& createfromstring(string s, MainInterpreter i);
+    static dictkey& createfromobj(snObj o);
+};
 class _dnObj : public _nObj {
 public:
-    _dnObj(MainInterpreter i,unordered_map<unsigned long long,nObj>& dict) : _nObj(i) {this->base = i->dictclass;this->dict = dict;reinterpret_cast<nObj>(this->base)->incref();};
+    _dnObj(MainInterpreter i,unordered_map<dictkey,nObj>& dict) : _nObj(i) {this->base = i->dictclass;this->dict = dict;reinterpret_cast<nObj>(this->base)->incref();};
     _dnObj(MainInterpreter i) : _nObj(i) {this->base = i->dictclass;reinterpret_cast<nObj>(this->base)->incref();};
-    unordered_map<unsigned long long,nObj> dict;
+    unordered_map<dictkey,nObj> dict;
+};
+class _lnObj : public _nObj {
+public:
+    _lnObj(MainInterpreter i) : _nObj(i) {this->base = i->listclass;reinterpret_cast<nObj>(this->base)->incref();};
+    vector<nObj> lval;
 };
 class _vnObj : public _nObj {
 public:
@@ -228,7 +240,7 @@ public:
 };
 class nTypeFuncWrap {
 public:
-    nObj operator() (vanObj l) {
+    virtual nObj operator() (vanObj l) {
         for (auto i : l.va) i->incref();
         if (this->v != nullptr) {
             nObj r = this->v(l);
@@ -380,6 +392,26 @@ inline std::string ptr_to_hex( T* i )
   stream << "0x" << std::hex << i;
   return stream.str();
 }
+class nTypeFuncWrapR : public nTypeFuncWrap {
+public:
+    nTypeFuncWrapR(nObj o) : nTypeFuncWrap() {
+        this->o = o;
+        o->incref();
+    };
+
+    nObj operator()(vanObj v) {
+        vanObj vo;
+        vo.t = v.t;
+        vo.va = v.va;
+        vo.va.insert(vo.va.begin(),o);
+        return this->o->base->funcs["call"](v);
+    }
+    ~nTypeFuncWrapR() {
+        o->decref();
+    }
+protected:
+    nObj o;
+};
 #define isofType(o,cls) (o->base == cls || isInVector(o->base->mro,cls))
 #define isnType(o) (o->base == i->basetypeclass || isInVector(o->base->mro,i->basetypeclass))
 namespace BaseObjFuncs {
@@ -446,7 +478,7 @@ namespace BaseObjFuncs {
     nTypeFuncWrap delitem = unerrfunc("delitem");
     nTypeFuncWrap length = unerrfunc("length");
     nTypeFuncWrap contains = unerrfunc("contains");
-    #error getattr missing, also the other base object functions
+    #error dir missing, also the other base object functions
     #define __internal_getattr__(obj,attrname) if (attrname == "__type__") return (nObj)(obj->base);\
     else if (attrname == "__dict__" && obj->has__dict__) return (nObj)(((vnObj)obj)->__dict__);
     #define __getattr_cls__(cls,attrname) if (check_key(((nType)cls)->funcs,attrname)) if (!(((nType)cls)->funcs[attrname].isNull())) return (nObj)(new _funcnObj(cls->i,((nType)cls)->funcs[attrname]));
@@ -457,7 +489,9 @@ namespace BaseObjFuncs {
         bool isSpecialMethod = (startsWith(((snObj)(va[1]))->sval,"__") && endsWith(((snObj)(va[1]))->sval,"__"));
         string attrname = ((snObj)(va[1]))->sval;
         bool isType = isnType(va[0]);
+        dictkey h = dictkey::createfromobj((snObj)va[1]);
         __internal_getattr__(va[0],attrname);
+        if (va[0]->has__dict__) if (check_key(((vnObj)va[0])->__dict__->dict,h)) return ((vnObj)va[0])->__dict__->dict[h];
         if (isSpecialMethod && isType) {
             __getattr_cls__(va[0],attrname);
         } else if (isSpecialMethod) {
@@ -497,10 +531,66 @@ namespace BaseObjFuncs {
                 throwInternalException(INVALIDARG,"Expected argument 3 of type " + i->dictclass->name + " but got " + va[2]->base->name,t);
             }
         }
-        if (isSpecialMethod && check_key(va[0]->base->funcs,attrname)) {
-            if (attrname == "del_int") throwInternalException(ATTRNOTFOUND,"Attribute del_int cannot be set",t);
-            if (va[0]->)
+        if (isSpecialMethod) {
+            if (!va[2]->base->intgetop("call").isNull()) throwInternalException(INVALIDARG,"Expected argument 3 to be callable",t);
         }
+        if (isSpecialMethod && isnType(va[0])) {
+            if (!check_key(((nType)va[0])->funcs,attrname)) {
+                throwInternalException(ATTRNOTFOUND,"Attribute " + attrname + " cannot be set",t);
+            }
+            if (attrname == "del_int") throwInternalException(ATTRNOTFOUND,"Attribute del_int cannot be set",t);
+            ((nType)va[0])->funcs[attrname] = nTypeFuncWrapR(va[2]);
+        }
+        else if (isSpecialMethod && check_key(va[0]->base->funcs,attrname)) {
+            if (attrname == "del_int") throwInternalException(ATTRNOTFOUND,"Attribute del_int cannot be set",t);
+            va[0]->base->funcs[attrname] = nTypeFuncWrapR(va[2]);
+        }
+        if (va[0]->has__dict__) {
+            unsigned long long h = va[1]->base->inthash(va[1],t);
+            if (check_key(((vnObj)va[0])->__dict__->dict,h)) {
+                ((vnObj)va[0])->__dict__->dict[h]->decref();
+            }
+            ((vnObj)va[0])->__dict__->dict[h] = va[2];
+            va[2]->incref();
+        }
+        throwInternalException(INVALIDARG,"Expected argument 1 to have a __dict__ object, but it does not exist.",t);
+    });
+    nTypeFuncWrap hasattr = wrapnFunc({
+        if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
+        if (!isofType(va[1],i->strclass)) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
+        //ok
+        bool isSpecialMethod = (startsWith(((snObj)(va[1]))->sval,"__") && endsWith(((snObj)(va[1]))->sval,"__"));
+        string attrname = ((snObj)(va[1]))->sval;
+        bool isType = isnType(va[0]);
+        __internal_getattr__(va[0],attrname);
+        unsigned long long h = va[1]->base->inthash(va[1],t);
+        if (va[0]->has__dict__) if (check_key(((vnObj)va[0])->__dict__->dict,h)) return i->truenObj;
+        if (isSpecialMethod && isType) {
+            if (check_key(((nType)va[0])->funcs,attrname)) return i->truenObj;
+        } else if (isSpecialMethod) {
+            if (check_key(va[0]->base->funcs,attrname)) return i->truenObj;
+        }
+        for (nType i : va[0]->base->mro) {
+            if (i->has__dict__) {
+                unsigned long long h = va[1]->base->inthash(va[1],t);
+                if (check_key(((vnObj)i)->__dict__->dict,h)) {
+                    return va[0]->i->truenObj;
+                }
+            }
+        }
+        return i->falsenObj;
+    });
+    nTypeFuncWrap dir = wrapnFunc({
+        if (va.size() != 1) throwInternalException(INVALIDNUMOFARGS,"Expected 1 argument but got " + std::to_string(va.size()),t);
+        vector<string> ret;
+        for (nType i : va[0]->base->mro) {
+            if (i->has__dict__) {
+                for (auto j : ((vnObj)i)->__dict__->dict) {
+                    ret.push_back(j.first);
+                }
+            }
+        }
+        
     });
 };
 nTypeFuncWrap& _nType::intgetop(string attr) {
@@ -511,4 +601,19 @@ nTypeFuncWrap& _nType::intgetop(string attr) {
 }
 _nType::_nType(MainInterpreter i) : _nObj(i) {
     this->base = i->basetypeclass;
+}
+dictkey& dictkey::createfromstring(string s, MainInterpreter i){
+    dictkey t;
+    t.key = s;
+    snObj so = new _snObj(i);
+    so->sval = s;
+    t.v = __hash::hashobj(so);
+    so->decref();
+    return t;
+}
+dictkey& dictkey::createfromobj(snObj o){
+    dictkey t;
+    t.key = o->sval;
+    t.v = __hash::hashobj(o);
+    return t;
 }
