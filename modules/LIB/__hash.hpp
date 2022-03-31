@@ -8,6 +8,6 @@ namespace __hash {
     };
     std::hash<l2> ls;
     unsigned long long inthash(unsigned long long a, unsigned long long b) {
-        return ls._Do_hash(l2(a,b));
+        return ls._Do_hash(l2(a,b)); //ignore this error
     }
 };
