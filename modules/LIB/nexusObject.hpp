@@ -322,6 +322,7 @@ public:
     nType base = nullptr;
     vector<nType> bases;
     vector<nType> mro;
+    bool isinternal = false;
     void redoMRO() {
         this->mro.clear();
         this->mro.push_back(this);
@@ -378,8 +379,8 @@ namespace __hash {
     unsigned long long hashobj(nObj obj) {
         obj->incref();
         obj->base->incref();
-        unsigned long long hor = ho._Do_hash(*(obj));
-        unsigned long long htr = ht._Do_hash(*(obj->base));
+        unsigned long long hor = ho._Do_hash(*(obj)); //ignore this error
+        unsigned long long htr = ht._Do_hash(*(obj->base)); //ignore this error
         obj->decref();
         obj->base->decref();
         return inthash(hor,htr);
@@ -517,7 +518,7 @@ namespace BaseObjFuncs {
         if (!isofType(va[1],i->strclass)) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
         bool isSpecialMethod = (startsWith(((snObj)(va[1]))->sval,"__") && endsWith(((snObj)(va[1]))->sval,"__"));
         string attrname = ((snObj)(va[1]))->sval;
-        if (va[0] == i->baseobjclass) throwInternalException(ATTRNOTFOUND,"Cannot set attribute for internal class "+ ((nType)va[0])->name,t);
+        if (isnType(va[0])) if (((nType)va[0])->isinternal) throwInternalException(ATTRNOTFOUND,"Cannot set attribute for internal class "+ ((nType)va[0])->name,t);
         if (attrname == "__type__") throwInternalException(ATTRNOTFOUND,"Attribute __type__ cannot be set",t);
         if (attrname == "__dict__") {
             if (va[0]->has__dict__ && isofType(va[2],i->dictclass)) {
