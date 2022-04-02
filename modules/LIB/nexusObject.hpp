@@ -28,6 +28,7 @@ using std::unordered_map;
 #define funcnObj _funcnObj*
 #define dnObj _dnObj*
 #define vnObj _vnObj*
+#define lnObj _lnObj*
 
 #define STRINGIFY2(X) #X
 #define STRINGIFY(X) STRINGIFY2(X)
@@ -172,7 +173,15 @@ public:
 };
 class _snObj : public _nObj {
 public:
-    _snObj(MainInterpreter i) : _nObj(i) {this->base = i->strclass;reinterpret_cast<nObj>(this->base)->incref();};
+    _snObj(MainInterpreter i) : _nObj(i) {
+        this->base = i->strclass;
+        reinterpret_cast<nObj>(this->base)->incref();
+    };
+    _snObj(MainInterpreter i, string val) : _nObj(i) {
+        this->base = i->strclass;
+        reinterpret_cast<nObj>(this->base)->incref();
+        this->sval = val;
+    }
     string sval;
 };
 class _nnObj : public _nObj {
@@ -196,6 +205,19 @@ class _lnObj : public _nObj {
 public:
     _lnObj(MainInterpreter i) : _nObj(i) {this->base = i->listclass;reinterpret_cast<nObj>(this->base)->incref();};
     vector<nObj> lval;
+    static void append(lnObj l, nObj o) {
+        l->lval.push_back(o);
+        o->incref();
+    }
+    void append(nObj o) {
+        this->lval.push_back(o);
+        o->incref();
+    }
+    ~_lnObj() {
+        for (auto i : this->lval) {
+            i->decref();
+        }
+    }
 };
 class _vnObj : public _nObj {
 public:
@@ -322,6 +344,7 @@ public:
     nType base = nullptr;
     vector<nType> bases;
     vector<nType> mro;
+    bool modifiable = false;
     void redoMRO() {
         this->mro.clear();
         this->mro.push_back(this);
@@ -448,13 +471,13 @@ namespace BaseObjFuncs {
     nTypeFuncWrap ilor = bierrfunc("ilor");
     nTypeFuncWrap ilxor = bierrfunc("ilxor");
     nTypeFuncWrap call = unerrfunc("call");
-    nTypeFuncWrap hash = wrapnFunc({
+    nTypeFuncWrap hash = wrapnFuncnull({
         long long h = __hash::hashobj(va[0]);
         inObj in = new _inObj(i);
         in->ival = h;
         return (nObj)in;
     });
-    nTypeFuncWrap repr = wrapnFunc({
+    nTypeFuncWrap repr = wrapnFuncnull({
         snObj s = new _snObj(i);
         s->sval = "<object at " + ptr_to_hex(va[0]) + " of type " + va[0]->base->name + ">";
         return (nObj)s;
@@ -462,7 +485,7 @@ namespace BaseObjFuncs {
     nTypeFuncWrap toint = unerrfunc("toint"); //int
     nTypeFuncWrap tonum = unerrfunc("tonum"); //num
     nTypeFuncWrap tostr = repr;               //str
-    nTypeFuncWrap newobj = wrapnFunc({        //new
+    nTypeFuncWrap newobj = wrapnFuncnull({        //new
         if (va.size() < 1) throwInternalException(INVALIDNUMOFARGS,"Expected 1 arguments but got 0",t);
         if (!isnType(va[0])) throwInternalException(INVALIDARG,"Expected argument 1 of type " + i->basetypeclass->name + " but got " + va[0]->base->name,t);
         nObj o = new _nObj(i);
@@ -470,19 +493,19 @@ namespace BaseObjFuncs {
         va[0]->incref();
         return o;
     });
-    nTypeFuncWrap initobj = wrapnFunc({}); //init
-    nTypeFuncWrap delpreobj = wrapnFunc({}); //del
-    nTypeFuncWrap delobj = wrapnFunc({va[0]->base->decref();delete va[0];}); //internal use only, del_int
+    nTypeFuncWrap initobj = wrapnFuncnull({}); //init
+    nTypeFuncWrap delpreobj = wrapnFuncnull({}); //del
+    nTypeFuncWrap delobj = wrapnFuncnull({va[0]->base->decref();delete va[0];}); //internal use only, del_int
     nTypeFuncWrap getitem = unerrfunc("getitem");
     nTypeFuncWrap setitem = unerrfunc("setitem");
     nTypeFuncWrap delitem = unerrfunc("delitem");
     nTypeFuncWrap length = unerrfunc("length");
     nTypeFuncWrap contains = unerrfunc("contains");
-    #error dir missing, also the other base object functions
+    //#error dir missing, also the other base object functions //- finished
     #define __internal_getattr__(obj,attrname) if (attrname == "__type__") return (nObj)(obj->base);\
     else if (attrname == "__dict__" && obj->has__dict__) return (nObj)(((vnObj)obj)->__dict__);
     #define __getattr_cls__(cls,attrname) if (check_key(((nType)cls)->funcs,attrname)) if (!(((nType)cls)->funcs[attrname].isNull())) return (nObj)(new _funcnObj(cls->i,((nType)cls)->funcs[attrname]));
-    nTypeFuncWrap getattr = wrapnFunc({
+    nTypeFuncWrap getattr = wrapnFuncnull({
         if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
         if (!isofType(va[1],i->strclass)) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
         //ok
@@ -504,7 +527,6 @@ namespace BaseObjFuncs {
         }
         for (nType i : va[0]->base->mro) {
             if (i->has__dict__) {
-                unsigned long long h = va[1]->base->inthash(va[1],t);
                 if (check_key(((vnObj)i)->__dict__->dict,h)) {
                     return (nObj)(((vnObj)i)->__dict__->dict[h]);
                 }
@@ -512,12 +534,12 @@ namespace BaseObjFuncs {
         }
         throwInternalException(ATTRNOTFOUND,"Attribute " + attrname + " not found",t);
     });
-    nTypeFuncWrap setattr = wrapnFunc({
+    nTypeFuncWrap setattr = wrapnFuncnull({
         if (va.size() != 3) throwInternalException(INVALIDNUMOFARGS,"Expected 3 arguments but got " + std::to_string(va.size()),t);
         if (!isofType(va[1],i->strclass)) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
         bool isSpecialMethod = (startsWith(((snObj)(va[1]))->sval,"__") && endsWith(((snObj)(va[1]))->sval,"__"));
         string attrname = ((snObj)(va[1]))->sval;
-        if (va[0] == i->baseobjclass) throwInternalException(ATTRNOTFOUND,"Cannot set attribute for internal class "+ ((nType)va[0])->name,t);
+        if (isnType(va[0])) if (!((nType)va[0])->modifiable) throwInternalException(ATTRNOTFOUND,"Cannot set attribute for internal class "+ ((nType)va[0])->name,t);
         if (attrname == "__type__") throwInternalException(ATTRNOTFOUND,"Attribute __type__ cannot be set",t);
         if (attrname == "__dict__") {
             if (va[0]->has__dict__ && isofType(va[2],i->dictclass)) {
@@ -541,12 +563,8 @@ namespace BaseObjFuncs {
             if (attrname == "del_int") throwInternalException(ATTRNOTFOUND,"Attribute del_int cannot be set",t);
             ((nType)va[0])->funcs[attrname] = nTypeFuncWrapR(va[2]);
         }
-        else if (isSpecialMethod && check_key(va[0]->base->funcs,attrname)) {
-            if (attrname == "del_int") throwInternalException(ATTRNOTFOUND,"Attribute del_int cannot be set",t);
-            va[0]->base->funcs[attrname] = nTypeFuncWrapR(va[2]);
-        }
         if (va[0]->has__dict__) {
-            unsigned long long h = va[1]->base->inthash(va[1],t);
+            dictkey h = dictkey::createfromobj((snObj)va[1]);
             if (check_key(((vnObj)va[0])->__dict__->dict,h)) {
                 ((vnObj)va[0])->__dict__->dict[h]->decref();
             }
@@ -555,7 +573,7 @@ namespace BaseObjFuncs {
         }
         throwInternalException(INVALIDARG,"Expected argument 1 to have a __dict__ object, but it does not exist.",t);
     });
-    nTypeFuncWrap hasattr = wrapnFunc({
+    nTypeFuncWrap hasattr = wrapnFuncnull({
         if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
         if (!isofType(va[1],i->strclass)) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
         //ok
@@ -563,35 +581,82 @@ namespace BaseObjFuncs {
         string attrname = ((snObj)(va[1]))->sval;
         bool isType = isnType(va[0]);
         __internal_getattr__(va[0],attrname);
-        unsigned long long h = va[1]->base->inthash(va[1],t);
+        dictkey h = dictkey::createfromobj((snObj)va[1]);
         if (va[0]->has__dict__) if (check_key(((vnObj)va[0])->__dict__->dict,h)) return i->truenObj;
         if (isSpecialMethod && isType) {
             if (check_key(((nType)va[0])->funcs,attrname)) return i->truenObj;
         } else if (isSpecialMethod) {
             if (check_key(va[0]->base->funcs,attrname)) return i->truenObj;
         }
-        for (nType i : va[0]->base->mro) {
-            if (i->has__dict__) {
-                unsigned long long h = va[1]->base->inthash(va[1],t);
-                if (check_key(((vnObj)i)->__dict__->dict,h)) {
-                    return va[0]->i->truenObj;
+        for (nType it : va[0]->base->mro) {
+            if (it->has__dict__) {
+                if (check_key(((vnObj)it)->__dict__->dict,h)) {
+                    return i->truenObj;
                 }
             }
         }
         return i->falsenObj;
     });
-    nTypeFuncWrap dir = wrapnFunc({
+    nTypeFuncWrap dir = wrapnFuncnull({
         if (va.size() != 1) throwInternalException(INVALIDNUMOFARGS,"Expected 1 argument but got " + std::to_string(va.size()),t);
         vector<string> ret;
+        lnObj l = new _lnObj(i);
         for (nType i : va[0]->base->mro) {
             if (i->has__dict__) {
                 for (auto j : ((vnObj)i)->__dict__->dict) {
-                    ret.push_back(j.first);
+                    ret.push_back(j.first.key);
                 }
             }
         }
-        
+        for (auto j : ret) {
+            l->append(new _snObj(i,j));
+            l->lval.back()->decref();
+        }
     });
+    nTypeFuncWrap delattr = wrapnFuncnull({
+        if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 3 arguments but got " + std::to_string(va.size()),t);
+        if (!isofType(va[1],i->strclass)) throwInternalException(INVALIDARG,"Expected argument 2 of type " + i->strclass->name + " but got " + va[1]->base->name,t);
+        bool isSpecialMethod = (startsWith(((snObj)(va[1]))->sval,"__") && endsWith(((snObj)(va[1]))->sval,"__"));
+        string attrname = ((snObj)(va[1]))->sval;
+        if (isnType(va[0])) if (!((nType)va[0])->modifiable) throwInternalException(ATTRNOTFOUND,"Cannot set attribute for internal class "+ ((nType)va[0])->name,t);
+        if (attrname == "__type__") throwInternalException(ATTRNOTFOUND,"Attribute __type__ cannot be deleted",t);
+        if (attrname == "__dict__") throwInternalException(ATTRNOTFOUND,"Attribute __dict__ cannot be deleted",t);
+        if (isSpecialMethod && isnType(va[0])) {
+            if (!check_key(((nType)va[0])->funcs,attrname)) {
+                throwInternalException(ATTRNOTFOUND,"Attribute " + attrname + " does not exist",t);
+            }
+            if (attrname == "del_int") throwInternalException(ATTRNOTFOUND,"Attribute del_int cannot be deleted",t);
+            ((nType)va[0])->funcs[attrname] = i->baseobjclass->funcs[attrname];
+        }
+        if (va[0]->has__dict__) {
+            dictkey h = dictkey::createfromobj((snObj)va[1]);
+            if (check_key(((vnObj)va[0])->__dict__->dict,h)) {
+                ((vnObj)va[0])->__dict__->dict[h]->decref();
+                ((vnObj)va[0])->__dict__->dict.erase(h);
+            }
+        } else throwInternalException(INVALIDARG,"Expected argument 1 to have a __dict__ object, but it does not exist.",t);
+    });
+    nTypeFuncWrap neq = wrapnFuncnull({
+        if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
+        if (va[0] == va[1]) return i->falsenObj;
+        return i->truenObj;
+    });
+    nTypeFuncWrap eq = wrapnFuncnull({
+        if (va.size() != 2) throwInternalException(INVALIDNUMOFARGS,"Expected 2 arguments but got " + std::to_string(va.size()),t);
+        if (va[0] == va[1]) return i->truenObj;
+        return i->falsenObj;
+    });
+    nTypeFuncWrap gt = bierrfunc("gt");
+    nTypeFuncWrap lt = bierrfunc("lt");
+    nTypeFuncWrap ge = bierrfunc("ge");
+    nTypeFuncWrap le = bierrfunc("le");
+    nTypeFuncWrap igt = bierrfunc("igt");
+    nTypeFuncWrap ilt = bierrfunc("ilt");
+    nTypeFuncWrap ige = bierrfunc("ige");
+    nTypeFuncWrap ile = bierrfunc("ile");
+    nTypeFuncWrap iter = unerrfunc("iter");
+    nTypeFuncWrap next = unerrfunc("next");
+
 };
 nTypeFuncWrap& _nType::intgetop(string attr) {
     for (nType i : this->mro) {
@@ -601,6 +666,72 @@ nTypeFuncWrap& _nType::intgetop(string attr) {
 }
 _nType::_nType(MainInterpreter i) : _nObj(i) {
     this->base = i->basetypeclass;
+    this->bases.push_back(i->baseobjclass);
+    this->name = "<null>";
+    this->funcs["__add__"] = BaseObjFuncs::add;
+    this->funcs["__sub__"] = BaseObjFuncs::sub;
+    this->funcs["__mul__"] = BaseObjFuncs::mul;
+    this->funcs["__div__"] = BaseObjFuncs::div;
+    this->funcs["__mod__"] = BaseObjFuncs::mod;
+    this->funcs["__pow__"] = BaseObjFuncs::pow;
+    this->funcs["__iadd__"] = BaseObjFuncs::iadd;
+    this->funcs["__isub__"] = BaseObjFuncs::isub;
+    this->funcs["__imul__"] = BaseObjFuncs::imul;
+    this->funcs["__idiv__"] = BaseObjFuncs::idiv;
+    this->funcs["__imod__"] = BaseObjFuncs::imod;
+    this->funcs["__ipow__"] = BaseObjFuncs::ipow;
+    this->funcs["__and__"] = BaseObjFuncs::andf;
+    this->funcs["__or__"] = BaseObjFuncs::orf;
+    this->funcs["__xor__"] = BaseObjFuncs::xorf;
+    this->funcs["__inv__"] = BaseObjFuncs::inv;
+    this->funcs["__shl__"] = BaseObjFuncs::shl;
+    this->funcs["__shr__"] = BaseObjFuncs::shr;
+    this->funcs["__iand__"] = BaseObjFuncs::iand;
+    this->funcs["__ior__"] = BaseObjFuncs::ior;
+    this->funcs["__ixor__"] = BaseObjFuncs::ixor;
+    this->funcs["__ishl__"] = BaseObjFuncs::ishl;
+    this->funcs["__ishr__"] = BaseObjFuncs::ishr;
+    this->funcs["__pos__"] = BaseObjFuncs::pos;
+    this->funcs["__neg__"] = BaseObjFuncs::neg;
+    this->funcs["__lnot__"] = BaseObjFuncs::lnot;
+    this->funcs["__land__"] = BaseObjFuncs::land;
+    this->funcs["__lor__"] = BaseObjFuncs::lor;
+    this->funcs["__lxor__"] = BaseObjFuncs::lxor;
+    this->funcs["__iland__"] = BaseObjFuncs::iland;
+    this->funcs["__ilor__"] = BaseObjFuncs::ilor;
+    this->funcs["__ilxor__"] = BaseObjFuncs::ilxor;
+    this->funcs["__call__"] = BaseObjFuncs::call;
+    this->funcs["__hash__"] = BaseObjFuncs::hash;
+    this->funcs["__repr__"] = BaseObjFuncs::repr;
+    this->funcs["__int__"] = BaseObjFuncs::toint;
+    this->funcs["__num__"] = BaseObjFuncs::tonum;
+    this->funcs["__str__"] = BaseObjFuncs::tostr;
+    this->funcs["__new__"] = BaseObjFuncs::newobj;
+    this->funcs["__init__"] = BaseObjFuncs::initobj;
+    this->funcs["__del__"] = BaseObjFuncs::delpreobj;
+    this->funcs["__del_int__"] = BaseObjFuncs::delobj;
+    this->funcs["__getitem__"] = BaseObjFuncs::getitem;
+    this->funcs["__setitem__"] = BaseObjFuncs::setitem;
+    this->funcs["__delitem__"] = BaseObjFuncs::delitem;
+    this->funcs["__length__"] = BaseObjFuncs::length;
+    this->funcs["__contains__"] = BaseObjFuncs::contains;
+    this->funcs["__getattr__"] = BaseObjFuncs::getattr;
+    this->funcs["__setattr__"] = BaseObjFuncs::setattr;
+    this->funcs["__delattr__"] = BaseObjFuncs::delattr;
+    this->funcs["__hasattr__"] = BaseObjFuncs::hasattr;
+    this->funcs["__dir__"] = BaseObjFuncs::dir;
+    this->funcs["__neq__"] = BaseObjFuncs::neq;
+    this->funcs["__eq__"] = BaseObjFuncs::eq;
+    this->funcs["__gt__"] = BaseObjFuncs::gt;
+    this->funcs["__lt__"] = BaseObjFuncs::lt;
+    this->funcs["__ge__"] = BaseObjFuncs::ge;
+    this->funcs["__le__"] = BaseObjFuncs::le;
+    this->funcs["__igt__"] = BaseObjFuncs::igt;
+    this->funcs["__ilt__"] = BaseObjFuncs::ilt;
+    this->funcs["__ige__"] = BaseObjFuncs::ige;
+    this->funcs["__ile__"] = BaseObjFuncs::ile;
+    this->funcs["__iter__"] = BaseObjFuncs::iter;
+    this->funcs["__next__"] = BaseObjFuncs::next;
 }
 dictkey& dictkey::createfromstring(string s, MainInterpreter i){
     dictkey t;
