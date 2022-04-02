@@ -401,8 +401,8 @@ namespace __hash {
     unsigned long long hashobj(nObj obj) {
         obj->incref();
         obj->base->incref();
-        unsigned long long hor = ho._Do_hash(*(obj));
-        unsigned long long htr = ht._Do_hash(*(obj->base));
+        unsigned long long hor = ho._Do_hash(*(obj)); //ignore this error
+        unsigned long long htr = ht._Do_hash(*(obj->base)); //ignore this error
         obj->decref();
         obj->base->decref();
         return inthash(hor,htr);
