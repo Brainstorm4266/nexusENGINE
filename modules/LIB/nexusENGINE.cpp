@@ -1,2 +1,15 @@
+#include <Windows.h>
+
 #include "nexusENGINE.hpp"
-// Empty, will fill in when nexusENGINE.hpp is made.
+#define RUN_NEXUSENGINE_AS_MAIN
+#ifdef RUN_NEXUSENGINE_AS_MAIN
+int CALLBACK WinMain(HINSTANCE hInstance,
+                     HINSTANCE hPrevInstance, 
+                     LPSTR lpCmdLine, 
+                     int nCmdShow)
+{   
+    init();
+    nexusWindow *w = new nexusWindow(hInstance);
+    return 0;
+}
+#endif

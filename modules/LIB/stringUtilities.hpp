@@ -150,18 +150,6 @@ std::string removeTrailingWhitespace(const std::string& str, const std::string& 
     return trimmed;
 }
 
-//remove leading and trailing whitespace from string
-std::string removeWhitespace(const std::string& str)
-{
-    return removeTrailingWhitespace(removeLeadingWhitespace(str));
-}
-
-//remove leading and trailing whitespace from string
-std::string removeWhitespace(const std::string& str, const std::string& whitespace)
-{
-    return removeTrailingWhitespace(removeLeadingWhitespace(str, whitespace), whitespace);
-}
-
 //replace all occurrences of a substring with another substring
 std::string replace(const std::string& str, const std::string& from, const std::string& to)
 {

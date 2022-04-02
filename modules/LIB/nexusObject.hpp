@@ -195,6 +195,16 @@ struct dictkey {
     static dictkey& createfromstring(string s, MainInterpreter i);
     static dictkey& createfromobj(snObj o);
 };
+bool operator == (const dictkey& a, const dictkey& b) {
+    return a.key == b.key && a.v == b.v;
+};
+template <>
+struct std::hash<dictkey> {
+    size_t operator()(const dictkey& k) const {
+        std::hash<string> h;
+        return __hash::inthash(k.v,h(k.key));
+    }
+};
 class _dnObj : public _nObj {
 public:
     _dnObj(MainInterpreter i,unordered_map<dictkey,nObj>& dict) : _nObj(i) {this->base = i->dictclass;this->dict = dict;reinterpret_cast<nObj>(this->base)->incref();};
@@ -396,16 +406,25 @@ public:
     _nType(MainInterpreter i);
 };
 namespace __hash {
-    hash_f<_nObj> ho;
-    hash_f<_nType> ht;
     unsigned long long hashobj(nObj obj) {
         obj->incref();
         obj->base->incref();
-        unsigned long long hor = ho._Do_hash(*(obj)); //ignore this error
-        unsigned long long htr = ht._Do_hash(*(obj->base)); //ignore this error
+        _nObj inst = *obj;
+        inst.refcnt = 0;
+        _nObj base = *(obj->base);
+        base.refcnt = 0;
+        std::size_t seed = 0;
+        const std::size_t nobjsize = sizeof(inst);
+        const std::size_t basesize = sizeof(base);
+        for (int i = 0; i < nobjsize;i++) {
+            hash_combine(seed,*((char*)&inst+i));
+        }
+        for (int i = 0; i < basesize;i++) {
+            hash_combine(seed,*((char*)&base+i));
+        }
         obj->decref();
         obj->base->decref();
-        return inthash(hor,htr);
+        return seed;
     }
 };
 template<typename T>
