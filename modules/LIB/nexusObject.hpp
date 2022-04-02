@@ -1,6 +1,6 @@
+
 #pragma once
 
-#include <thread>
 #include <string>
 #include <vector>
 #include <iomanip>
@@ -11,6 +11,7 @@
 #include "__hash.hpp"
 #include "isInVector.hpp"
 #include "stringUtilities.hpp"
+#include "threads.hpp"
 
 using std::string;
 using std::vector;
@@ -88,37 +89,6 @@ public:
     nObj falsenObj;
     nObj truenObj;
     vector<Thread*> threads;
-};
-class BaseThread {
-public:
-    ~BaseThread() {
-        if (this->thread != nullptr) delete this->thread;
-    }
-    bool start() {
-        if (!this->alreadystarted) {
-            this->thread = new std::thread(this->task,this);
-            this->alreadystarted = true;
-            return true;
-        } 
-        return false;
-    };
-    void run() {
-        this->task(this);
-    }
-    void kill() {
-        this->killed = true;
-    }
-    bool getKilled() {
-        return this->killed;
-    }
-    void join() {
-        this->thread->join();
-    }
-    void (*task)(BaseThread*);
-private:
-    std::thread* thread;
-    bool alreadystarted = false;
-    bool killed = false;
 };
 class _nObj {
 public:
