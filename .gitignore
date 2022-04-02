@@ -40,3 +40,4 @@ test/*.*
 *.recipe
 *.log
 .vscode
+*.pdb
