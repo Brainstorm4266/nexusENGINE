@@ -9,7 +9,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
                      LPSTR lpCmdLine, 
                      int nCmdShow)
 {   
-    //init();
+    #ifdef oldv
     #ifndef NDEBUG
     nexusWindow *w = nexusWindow::newinst(hInstance,"nexusEngine - Debug Mode",{640,480});
     #else
@@ -27,6 +27,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     } else {
         return msg.wParam;
     }
+    #else
+        __windowprototype2::nexusWindow::nexusWindow(640,480,L"OwO");
+        __windowprototype2::nexusWindow::nexusWindow(480,640,L"UwU");
+    #endif
     return 0;
 }
 #endif

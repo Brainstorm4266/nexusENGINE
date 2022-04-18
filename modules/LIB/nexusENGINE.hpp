@@ -2,7 +2,6 @@
 #ifndef UNICODE
 	#define UNICODE
 #endif
-
 #ifdef UNICODE
 	#ifndef _UNICODE
 		#define _UNICODE
