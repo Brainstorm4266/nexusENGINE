@@ -1,5 +1,6 @@
 #pragma once
 #include <thread>
+#include <condition_variable>
 
 class BaseThread {
 public:
