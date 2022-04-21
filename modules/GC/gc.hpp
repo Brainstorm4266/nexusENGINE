@@ -1,6 +1,7 @@
 #include <vector>
 #include <exception>
 #include <iostream>
+#include <algorithm>
 
 #pragma once
 namespace gc_old {
@@ -175,20 +176,87 @@ namespace gc {
     class GCObjectHead
     {
     public:
-        vector<GCObject<void*>*> object_to_ref;
-        vector<GCObject<void*>*> ref_to_object;
+        vector<GCObjectHead*> object_to_ref;
+        vector<GCObjectHead*> ref_to_object;
         unsigned long long Crefs = 0;
         const volatile size_t size = 0;
         volatile size_t arrlen = 1;
-        size_t getTotalSize() {
-            return size*arrlen;
-        }
+        size_t getTotalSize();
+        size_t getTotalRefs();
     };
+    size_t GCObjectHead::getTotalSize() {
+        return size*arrlen;
+    }
+    size_t GCObjectHead::getTotalRefs() {
+        return object_to_ref.size()+Crefs;
+    }
     template <typename T>
     class GCObject : public GCObjectHead
     {
     public:
         T data;
         const volatile size_t size = sizeof(T);
+    };
+    class GC final {
+        GC() {}
+        friend class GCObjectHead;
+        template <typename T>
+        friend class Object;
+        friend class Generic;
+    protected:
+        vector<GCObjectHead*> objects;
+    public:
+        //make this a singleton
+        static GC& getInstance() {
+            static GC instance;
+            return instance;
+        }
+        GC(const GC&) = delete;
+        GC& operator=(const GC&) = delete;
+
+
+    };
+    template <typename T>
+    class Object {
+    protected:
+        GCObject<T>* data = nullptr;
+        long long memcheck() {
+            GCObjectHead* b = (GCObjectHead*)(GC::getInstance().objects.begin());
+            GCObjectHead* e = (GCObjectHead*)(GC::getInstance().objects.end());
+            if (this > b && this < e) {
+                return (this-b) % sizeof(T);
+            }
+            return -1;
+        }
+        void do_mem() {
+            long long l = memcheck();
+            if (l != -1) {
+                #ifdef GCDEBUG
+                std::cout << "Found references to objects" << std::endl;
+                #endif
+                //is in vector
+                if (std::find(data->ref_to_object.begin(), data->ref_to_object.end(), GC::objects[l])) {
+                    #ifdef GCDEBUG
+                    std::cout << "Already processed reference" << std::endl;
+                    #endif
+                    return;
+                }
+                data->ref_to_object.push_back(GC::objects[l]);
+                GC::objects[l]->object_to_ref.push_back(data);
+            }
+        }
+    public:
+        Object() : data(nullptr) {}
+        Object(const Object& o) {
+            #ifdef GCDEBUG
+            std::cout<< "GC object copy" << std::endl;
+            #endif
+            data = o.data;
+            data->Crefs++;
+            #ifdef GCDEBUG
+            std::cout << "GC new object increment ref" << std::endl;
+            #endif
+            do_mem();
+        }
     };
 }
