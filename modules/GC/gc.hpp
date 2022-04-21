@@ -3,7 +3,7 @@
 #include <iostream>
 
 #pragma once
-namespace gc {
+namespace gc_old {
     using std::vector;
     template <typename T>
     class _GCHead 
@@ -11,7 +11,12 @@ namespace gc {
     public:
         const volatile size_t size = sizeof(T);
         long long refcnt = 0;
+        long long inactiverefcnt = 0;
         T data = {0};
+        long long activeRefCnt() 
+        {
+            return refcnt-inactiverefcnt;
+        }
     };
     class GenericObject;
     template <typename T>
@@ -151,11 +156,39 @@ namespace gc {
     };
 }
 template <typename T>
-gc::GenericObject::operator gc::Object<T>() {
+gc_old::GenericObject::operator gc_old::Object<T>() {
     if(sizeof(T) != data->size) throw std::bad_cast("Size of T is not equal to size of data");
-    return gc::Object<T>(*(data->data));
+    return gc_old::Object<T>(*(data->data));
 }
 template <typename T>
-gc::Object<T>::operator gc::GenericObject() {
-    return gc::GenericObject(*(data->data));
+gc_old::Object<T>::operator gc_old::GenericObject() {
+    return gc_old::GenericObject(*(data->data));
+}
+namespace gc {
+    using std::vector;
+    template <typename T>
+    class Object;
+    class Generic;
+    class GC;
+    template <typename T>
+    class GCObject;
+    class GCObjectHead
+    {
+    public:
+        vector<GCObject<void*>*> object_to_ref;
+        vector<GCObject<void*>*> ref_to_object;
+        unsigned long long Crefs = 0;
+        const volatile size_t size = 0;
+        volatile size_t arrlen = 1;
+        size_t getTotalSize() {
+            return size*arrlen;
+        }
+    };
+    template <typename T>
+    class GCObject : public GCObjectHead
+    {
+    public:
+        T data;
+        const volatile size_t size = sizeof(T);
+    };
 }
