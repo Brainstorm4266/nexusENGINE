@@ -9,11 +9,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
                      LPSTR lpCmdLine, 
                      int nCmdShow)
 {   
-    #ifdef oldv
     #ifndef NDEBUG
-    nexusWindow *w = nexusWindow::newinst(hInstance,"nexusEngine - Debug Mode",{640,480});
+    nexusWindow *w = nexusWindow::newinst("nexusEngine - Debug Mode",{640,480});
     #else
-    nexusWindow *w = nexusWindow::newinst(hInstance,"nexusEngine",{640,480});
+    nexusWindow *w = nexusWindow::newinst("nexusEngine",{640,480});
     #endif
     w->KeyDownEvent.Connect(test_event_k_down);
     MSG msg;
@@ -27,10 +26,6 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     } else {
         return msg.wParam;
     }
-    #else
-        __windowprototype2::nexusWindow::nexusWindow(640,480,L"OwO");
-        __windowprototype2::nexusWindow::nexusWindow(480,640,L"UwU");
-    #endif
     return 0;
 }
 #endif

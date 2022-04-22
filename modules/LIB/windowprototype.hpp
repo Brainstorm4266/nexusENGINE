@@ -192,19 +192,20 @@ namespace __windowprototype {
         friend class nexusWindow;
         HWND hWnd;
         LPCWSTR title;
+        HINSTANCE hInstanceV;
         nexusWindow* n;
-        __nexusWindow(HINSTANCE hInstance,LPCWSTR title, Vec2 resolution) {
+        __nexusWindow(LPCWSTR title, Vec2 resolution)
+            : title(title), hInstanceV(GetModuleHandle(nullptr)), n(nullptr)
+        {
             auto pClassName = L"hw3dbutts";
-            this->title = title;
             FreeConsole();
-            this->n = n;
             this->wc = {0};
             this->wc.cbSize = sizeof(this->wc);
             this->wc.style = CS_OWNDC;
             this->wc.lpfnWndProc = this->WndProc;
             this->wc.cbClsExtra = 0;
             this->wc.cbWndExtra = 0;
-            this->wc.hInstance = hInstance;
+            this->wc.hInstance = hInstanceV;
             this->wc.hIcon = nullptr;
             this->wc.hCursor = nullptr;
             this->wc.hbrBackground = nullptr;
@@ -217,8 +218,9 @@ namespace __windowprototype {
                 title,
                 WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
                 200,200,resolution.x,resolution.y,
-                nullptr,nullptr,hInstance,nullptr);
+                nullptr,nullptr,hInstanceV,nullptr);
             ShowWindow(this->hWnd,SW_SHOW);
+            UpdateWindow(this->hWnd);
         }
         static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
     public:
@@ -229,6 +231,7 @@ namespace __windowprototype {
         ~__nexusWindow() {
             // send debug message "Goodbye."
             OutputDebugString(L"Goodbye.\n");
+            DestroyWindow(this->hWnd);
             UnregisterClass(this->wc.lpszClassName,this->wc.hInstance);
         }
     };
@@ -250,18 +253,14 @@ namespace __windowprototype {
     {
     public:
         friend class __nexusWindow;
-        void drawLine2D(Vec2, Vec2);
-        void drawPolygon(Vec2, Vec2, Vec2);
-        void drawLine3D(Vec3, Vec3);
-        void drawPolygon(Vec3, Vec3, Vec3);
         HWND& __getHandle() {
             return _w->hWnd;
         }
         nexusWindow() = delete;
         nexusWindow(nexusWindow const&)     = delete;
         void operator=(nexusWindow const&)  = delete;
-        static nexusWindow* newinst(HINSTANCE hInstance, string title, Vec2 res) {
-            if (inst == nullptr) return new nexusWindow(hInstance,title,res,true);
+        static nexusWindow* newinst(string title, Vec2 res) {
+            if (inst == nullptr) return new nexusWindow(title,res,true);
             else return inst;
         }
         static nexusWindow* getinst() {
@@ -272,13 +271,18 @@ namespace __windowprototype {
         Event<unsigned long long,unsigned long long>& KeyCharEvent = _KeyCharEvent;
         Event<Key,long,long>& MouseUpEvent = _MouseUpEvent;
         Event<Key,long,long>& MouseDownEvent = _MouseDownEvent;
+        Vec2 getMousePos() {
+            POINT p;
+            GetCursorPos(&p);
+            return Vec2(p.x,p.y);
+        }
     protected:
-        nexusWindow(HINSTANCE hInstance, string title, Vec2 res, bool);
+        nexusWindow(string title, Vec2 res, bool);
     };
-    nexusWindow::nexusWindow(HINSTANCE hInstance, string title, Vec2 res, bool) {
+    nexusWindow::nexusWindow(string title, Vec2 res, bool) {
         std::wstring stemp = std::wstring(title.begin(), title.end());
         LPCWSTR sw = stemp.c_str();
-        _w = new __nexusWindow(hInstance, sw, res);
+        _w = new __nexusWindow(sw, res);
     }
     LRESULT CALLBACK __nexusWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
@@ -343,7 +347,7 @@ namespace __windowprototype {
         };
 }
 using __windowprototype::nexusWindow;
-namespace __windowprototype2 {
+/*namespace __windowprototype2 {
     class nexusWindow
     {
     public:
@@ -457,4 +461,4 @@ namespace __windowprototype2 {
         }
         return DefWindowProc(hWnd, msg, wParam, lParam);
     }
-}
+}*/
