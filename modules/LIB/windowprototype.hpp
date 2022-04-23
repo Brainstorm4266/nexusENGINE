@@ -1,12 +1,17 @@
 #pragma once
-#include "vectors.hpp"
-#include "nexusObject.hpp"
-#include "win.hpp"
-#include "Events.hpp"
 #include <iostream>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+
+#include "vectors.hpp"
+#include "nexusObject.hpp"
+#include "win.hpp"
+#include "Events.hpp"
+#include "../DEBUG/debug.hpp"
+#include "nxeExc.hpp"
+#include "isInVector.hpp"
+
 
 enum keyState {
     KEY_UP,
@@ -256,12 +261,24 @@ namespace __windowprototype {
         HWND& __getHandle() {
             return _w->hWnd;
         }
+        class Exception : public nexusException
+        {
+        public:
+            Exception(int line, const char* file, HRESULT hr) noexcept;
+            const char* what() const noexcept override;
+            virtual const char* getType() const noexcept;
+            static std::string TranslateErrorCode(HRESULT hr) noexcept;
+            HRESULT GetErrorCode() const noexcept;
+            std::string GetErrorString() const noexcept;
+        private:
+            HRESULT hr;
+        };
         nexusWindow() = delete;
         nexusWindow(nexusWindow const&)     = delete;
         void operator=(nexusWindow const&)  = delete;
         static nexusWindow* newinst(string title, Vec2 res) {
-            if (inst == nullptr) return new nexusWindow(title,res,true);
-            else return inst;
+            if (inst == nullptr) inst = new nexusWindow(title,res,true);
+            return inst;
         }
         static nexusWindow* getinst() {
             return inst;
@@ -271,13 +288,18 @@ namespace __windowprototype {
         Event<unsigned long long,unsigned long long>& KeyCharEvent = _KeyCharEvent;
         Event<Key,long,long>& MouseUpEvent = _MouseUpEvent;
         Event<Key,long,long>& MouseDownEvent = _MouseDownEvent;
-        Vec2 getMousePos() {
+        static Vec2 getMousePos() {
             POINT p;
             GetCursorPos(&p);
             return Vec2(p.x,p.y);
         }
+        static std::vector<Key> getKeysDown() {
+            return nexusWindow::getinst()->keysdown;
+        }
     protected:
         nexusWindow(string title, Vec2 res, bool);
+    private:
+        std::vector<Key> keysdown;
     };
     nexusWindow::nexusWindow(string title, Vec2 res, bool) {
         std::wstring stemp = std::wstring(title.begin(), title.end());
@@ -286,67 +308,151 @@ namespace __windowprototype {
     }
     LRESULT CALLBACK __nexusWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
-            switch (message)
-            {
-            case WM_CLOSE:
-                PostQuitMessage(0);
-                break;
-            case WM_LBUTTONDOWN:
-                if (wParam == 1) {
-                    POINT pos;
-                    GetCursorPos(&pos);
-                    _MouseDownCall(LMB,pos.x,pos.y);
+            try {
+                switch (message)
+                {
+                case WM_CLOSE:
+                    PostQuitMessage(wParam);
+                    break;
+                case WM_LBUTTONDOWN:
+                    if (wParam == 1) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseDownCall(LMB,pos.x,pos.y);
+                    }
+                case WM_MBUTTONDOWN:
+                    if (wParam == 2) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseDownCall(MMB,pos.x,pos.y);
+                    }            
+                case WM_RBUTTONDOWN:
+                    if (wParam == 3) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseDownCall(RMB,pos.x,pos.y);
+                    }
+                case WM_KEYDOWN:
+                    if (!isInVector(nexusWindow::getinst()->keysdown,(Key)wParam)) {
+                        nexusWindow::getinst()->keysdown.push_back((Key)wParam);
+                        _KeyDownCall(wParam,lParam);
+                    }
+                    return 0;
+                case WM_LBUTTONUP:
+                    if (true) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseUpCall(LMB,pos.x,pos.y);
+                    }
+                    if (isInVector(nexusWindow::getinst()->keysdown, Key::LMB)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), Key::LMB), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(Key::LMB,lParam);
+                    }
+                    return 0;
+                case WM_MBUTTONUP:
+                    if (true) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseUpCall(MMB,pos.x,pos.y);
+                    }
+                    if (isInVector(nexusWindow::getinst()->keysdown, Key::MMB)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), Key::MMB), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(Key::MMB,lParam);
+                    }
+                    return 0;
+                case WM_RBUTTONUP:
+                    if (true) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseUpCall(RMB,pos.x,pos.y);
+                    }
+                    if (isInVector(nexusWindow::getinst()->keysdown, Key::RMB)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), Key::RMB), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(Key::RMB,lParam);
+                    }
+                    return 0;
+                case WM_KEYUP:
+                    if (isInVector(nexusWindow::getinst()->keysdown,(Key)wParam)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), (Key)wParam), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(wParam,lParam);
+                    }
+                    return 0;
+                case WM_CHAR:
+                    _KeyCharCall(wParam,lParam);
+                    return 0;
                 }
-            case WM_MBUTTONDOWN:
-                if (wParam == 2) {
-                    POINT pos;
-                    GetCursorPos(&pos);
-                    _MouseDownCall(MMB,pos.x,pos.y);
-                }            
-            case WM_RBUTTONDOWN:
-                if (wParam == 3) {
-                    POINT pos;
-                    GetCursorPos(&pos);
-                    _MouseDownCall(RMB,pos.x,pos.y);
-                }
-            case WM_KEYDOWN:
-                _KeyDownCall(wParam,lParam);
-                return 0;
-            case WM_LBUTTONUP:
-                if (true) {
-                    POINT pos;
-                    GetCursorPos(&pos);
-                    _MouseUpCall(LMB,pos.x,pos.y);
-                }
-                _KeyUpCall(Key::LMB,lParam);
-                return 0;
-            case WM_MBUTTONUP:
-                if (true) {
-                    POINT pos;
-                    GetCursorPos(&pos);
-                    _MouseUpCall(MMB,pos.x,pos.y);
-                }
-                _KeyUpCall(Key::MMB,lParam);
-                return 0;
-            case WM_RBUTTONUP:
-                if (true) {
-                    POINT pos;
-                    GetCursorPos(&pos);
-                    _MouseUpCall(RMB,pos.x,pos.y);
-                }
-                _KeyUpCall(Key::RMB,lParam);
-                return 0;
-            case WM_KEYUP:
-                _KeyUpCall(wParam,lParam);
-                return 0;
-            case WM_CHAR:
-                _KeyCharCall(wParam,lParam);
-                return 0;
+                return DefWindowProc(hWnd, message, wParam, lParam);
             }
-            return DefWindowProc(hWnd, message, wParam, lParam);
+            catch (const nexusException& e) {
+                std::string ewhatst = e.what();
+                std::wstring ewhat = std::wstring(ewhatst.begin(), ewhatst.end());
+                std::string etypest = e.GetType();
+                std::wstring etype = std::wstring(etypest.begin(), etypest.end());
+                MessageBox(nullptr, ewhat.c_str(), etype.c_str(), MB_OK | MB_ICONERROR);
+            }
+            catch (const std::exception& e) {
+                std::string ewhatst = e.what();
+                std::wstring ewhat = std::wstring(ewhatst.begin(), ewhatst.end());
+                MessageBox(nullptr, ewhat.c_str(), L"Std exception", MB_OK | MB_ICONERROR);
+            }
+            catch (...) {
+                MessageBox(nullptr, L"No details available.", L"Unknown error", MB_OK | MB_ICONERROR);
+            }
+            return -1;
         };
+    nexusWindow::Exception::Exception(int line, const char* file, HRESULT hr) noexcept
+        :
+        nexusException(line,file),
+        hr(hr)
+    {}
+    const char* nexusWindow::Exception::what() const noexcept
+    {
+        std::ostringstream oss;
+        oss << GetType() << std::endl
+            << "[Error Code] 0x" << std::hex << std::uppercase << GetErrorCode() <<std::endl
+            << "[Description] " << GetErrorString() << std::endl
+            << GetOrigin();
+        whatBuffer = oss.str();
+        return whatBuffer.c_str();
+    }
+    const char* nexusWindow::Exception::getType() const noexcept
+    {
+        return "nxE Window Exception";
+    }
+    std::string nexusWindow::Exception::TranslateErrorCode(HRESULT hr) noexcept
+    {
+        wchar_t* pMsgBuf = nullptr;
+        DWORD nMsgLen = FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+            nullptr,
+            hr,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            reinterpret_cast<LPWSTR>(&pMsgBuf),
+            0,
+            nullptr
+        );
+        if (nMsgLen == 0)
+        {
+            return "undefined";
+        }
+        std::wstring ErrMsg = pMsgBuf;
+        LocalFree(pMsgBuf);
+        std::string ErrMsgStd = std::string(ErrMsg.begin(), ErrMsg.end());
+        return ErrMsgStd;
+    }
+    HRESULT nexusWindow::Exception::GetErrorCode() const noexcept
+    {
+        return hr;
+    }
+    std::string nexusWindow::Exception::GetErrorString() const noexcept
+    {
+        return TranslateErrorCode(GetErrorCode());
+    }
 }
 using __windowprototype::nexusWindow;
+#define nxEWnd_Except(hr) nexusWindow::Exception(__LINE__,__FILE__,hr)
 /*namespace __windowprototype2 {
     class nexusWindow
     {

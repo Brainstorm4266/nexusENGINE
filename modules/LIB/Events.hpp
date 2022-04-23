@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <chrono>
+#include <tuple>
 
 #define EventType(...) void (*) (__VA_ARGS__)
 #define EventTypeW(name,...) void (*name) (__VA_ARGS__)
@@ -53,11 +54,13 @@ public:
 };
 template<typename... Args>
 class Event final {
-    std::vector<EventType(Args...)> handles;
+    mutable std::vector<EventType(Args...)> handles;
     static void fh(Event<Args...>* e,EventTypeW(f,Args...), Args... args) {
         f(args...);
     }
     static void InternalCall(Event<Args...>* e,Args... args) {
+        e->lastcall = std::tuple<Args...>(args...);
+        e->cv.notify_all();
         for (auto& handle : e->handles) {
             std::thread(fh,e,handle,args...).detach();
         }
@@ -70,7 +73,10 @@ class Event final {
             e->handles.erase(std::find(e->handles.begin(),e->handles.end(),f));
         }
     }
-    bool callermade = false;
+    mutable bool callermade = false;
+    mutable std::mutex m;
+    mutable std::condition_variable cv;
+    mutable std::tuple<Args...> lastcall;
 public:
     ____EVENTHANDLER_PRIVATE Connect(EventTypeW(f,Args...)) {
         ____EVENTHANDLER_PRIVATE e;
@@ -80,6 +86,11 @@ public:
         handles.push_back(f);
         return e;
     };
+    std::tuple<Args...> Wait() {
+        std::unique_lock<std::mutex> lk(m);
+        cv.wait(lk);
+        return lastcall;
+    }
     InstancedStaticFunctionCaller__nonstatic<Event<Args...>,void,Args...> operator() () {
         if (callermade) throw std::runtime_error("Caller already made.");
         callermade = true;

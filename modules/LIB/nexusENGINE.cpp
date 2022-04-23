@@ -2,7 +2,12 @@
 #ifdef RUN_NEXUSENGINE_AS_MAIN
 #include "nexusENGINE.hpp"
 void test_event_k_down(unsigned long long a, unsigned long long b) {
-    OutputDebugString((L"Event call key down: " + std::to_wstring(a) + L" " + std::to_wstring(b) + L"\n").c_str());
+    debug_print("Event call key down:",a,b);
+    debug_print("Keys down:",nexusWindow::getKeysDown());
+}
+void test_event_k_up(unsigned long long a, unsigned long long b) {
+    debug_print("Event call key up:",a);
+    debug_print("Keys down:",nexusWindow::getKeysDown());
 }
 int CALLBACK WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance, 
@@ -15,6 +20,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     nexusWindow *w = nexusWindow::newinst("nexusEngine",{640,480});
     #endif
     w->KeyDownEvent.Connect(test_event_k_down);
+    w->KeyUpEvent.Connect(test_event_k_up);
     MSG msg;
     BOOL gResult;
     while (gResult = GetMessage(&msg,nullptr,0,0) > 0) {
@@ -26,6 +32,5 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     } else {
         return msg.wParam;
     }
-    return 0;
 }
 #endif
