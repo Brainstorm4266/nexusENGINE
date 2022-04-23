@@ -3,8 +3,8 @@
 #include <iostream>
 #include <algorithm>
 #include <typeinfo>
-
-#error "fuck this im out"
+#include <unordered_map>
+#include <cstdlib>
 
 #include "../LIB/Events.hpp"
 
@@ -181,6 +181,7 @@ gc_old::Object<T>::operator gc_old::GenericObject() {
 }
 namespace gc {
     using std::vector;
+    using std::unordered_map;
     template <typename T>
     class Object;
     class Generic;
@@ -198,6 +199,7 @@ namespace gc {
         EventCaller<> e;
     public:
         friend class GC;
+        friend class GCAllocator;
         vector<GCObjectHead*> object_to_ref;
         vector<GCObjectHead*> ref_to_object;
         //ref types
@@ -215,18 +217,103 @@ namespace gc {
         {}
         size_t getSelfRefs();
     };
+    class GCIterator {
+        friend class GC;
+        friend class GCAllocator;
+        GCObjectHead* head;
+        GCAllocator* obj;
+        size_t index;
+        size_t end;
+        GCIterator(size_t head, size_t end, GCAllocator* obj) :
+            head((GCObjectHead*)head),
+            index(0),
+            end(end),
+            obj(obj)
+        {}
+        GCObjectHead& operator*() {
+            jumpiferased();
+            return *((GCObjectHead*)((size_t)head + index));
+        }
+        GCObjectHead* operator->() {
+            jumpiferased();
+            return (GCObjectHead*)((size_t)head + index);
+        }
+        operator GCObjectHead*() {
+            jumpiferased();
+            return (GCObjectHead*)((size_t)head + index);
+        }
+        GCIterator& operator++(int);
+        bool isAtEnd() {
+            return this->operator*().getTotalSize() + index + sizeof(GCObjectHead) == end;
+        }
+        void jumpiferased();
+    };
     class GCAllocator {
         friend class GC;
+        friend class GCIterator;
         size_t capacity = 0;
         void* data = nullptr;
-        GCObjectHead* allocate(size_t size) {
+        unordered_map<size_t, size_t> erased;
+        size_t allocatenew(size_t size) {
             size_t newcap = size + sizeof(GCObjectHead);
-            if (newcap > capacity) {
-                capacity = roundinchunks(newcap, sizeof(GCObjectHead));
-                data = realloc(data, capacity);
+            if (newcap > (capacity)) {
+                capacity += newcap;
+                if (data == nullptr) data = malloc(capacity);
+                else data = realloc(data, capacity);
             }
+            (*((GCObjectHead*)(capacity-newcap + (size_t)data))) = GCObjectHead();
+            return capacity-newcap;
         };
+        void remap_erased() {
+            size_t oldaddy = 0;
+            size_t oldsize = 0;
+            for (auto& i : erased) {
+                if (oldaddy == 0) {
+                    oldaddy = i.first;
+                    oldsize = i.second;
+                } else if (oldaddy + oldsize == i.first) {
+                    oldsize += i.second;
+                    erased.erase(i.first);
+                    erased[oldaddy] = oldsize;
+                } else {
+                    oldaddy = i.first;
+                    oldsize = i.second;
+                }
+            }
+        }
+        size_t allocate(size_t size) {
+            size_t newcap = size + sizeof(GCObjectHead);
+            for (auto& i : erased) {
+                if (i.second >= newcap) {
+                    GCObjectHead* ret = (GCObjectHead*)(i.first + (size_t)data);
+                    (*ret) = GCObjectHead();
+                    erased.erase(i.first);
+                    if (i.second > newcap) {
+                        erased[i.first + newcap] = i.second - newcap;
+                    }
+                    return i.first;
+                }
+            }
+            return allocatenew(size);
+        }
+        void erase(size_t obj) {
+            erased[obj] = ((GCObjectHead*)(obj + (size_t)data))->getTotalSize() + sizeof(GCObjectHead);
+        }
+    public:
+        ~GCAllocator() {
+            free(data); //erase all objects
+        }
     };
+    void GCIterator::jumpiferased() {
+        if (obj->erased.find(index) != obj->erased.end()) {
+            index += obj->erased[index];
+        }
+    }
+    GCIterator& GCIterator::operator++(int) {
+        index += head->getTotalSize() + sizeof(GCObjectHead);
+        jumpiferased();
+        return *this;
+    }
     size_t GCObjectHead::getTotalSize() {
         return size*arrlen;
     }
@@ -277,7 +364,9 @@ namespace gc {
     class GCObject final : public GCObjectHead
     {
     public:
-        size = sizeof(T);
+        GCObject() : GCObjectHead() {
+            this->size = sizeof(T);
+        };
         T data;
     };
     class GC final {
@@ -286,8 +375,7 @@ namespace gc {
         template <typename T>
         friend class Object;
         friend class Generic;
-    protected:
-        vector<GCObjectHead*> objects;
+        GCAllocator allocator;
     public:
         //make this a singleton
         static GC& getInstance() {
@@ -300,7 +388,7 @@ namespace gc {
             #ifdef GCDEBUG
             std::cout << "GC collect" << std::endl;
             #endif
-            for (auto& i : GC::getInstance().objects)
+            /*for (auto& i : GC::getInstance().objects)
             {
                 GC_PRINTOBJ_REF(i);
                 if (i->getActiveRefs() == 0) {
@@ -311,16 +399,40 @@ namespace gc {
                     delete i;
                     GC::getInstance().objects.erase(std::find(GC::getInstance().objects.begin(), GC::getInstance().objects.end(), i));
                 }
+            }*/
+            GCIterator it = GCIterator(
+                (size_t)GC::getInstance().allocator.data,
+                GC::getInstance().allocator.capacity,
+                &(GC::getInstance().allocator)
+            );
+            it.jumpiferased();
+            if (it.isAtEnd()) return;
+            while (true) {
+                GCObjectHead& obj = *it;
+                GC_PRINTOBJ_REF((&obj));
+                if (obj.getActiveRefs() == 0) {
+                    #ifdef GCDEBUG
+                    std::cout << "GC delete object" << std::endl;
+                    #endif
+                    obj.e();
+                    GC::getInstance().allocator.erase(it.index);
+                }
+                it++;
+                if (it.isAtEnd()) break;
             }
+            GC::getInstance().allocator.remap_erased();
         }
-        static void add(GCObjectHead* obj) {
-            GC::getInstance().objects.push_back(obj);
+        static size_t newobj(size_t size) {
+            return GC::getInstance().allocator.allocate(size);
+        }
+        static GCObjectHead* getObject(size_t obj) {
+            return (GCObjectHead*)(obj + (size_t)GC::getInstance().allocator.data);
         }
     };
     template <typename T>
     class Object {
     protected:
-        GCObject<T>* data = nullptr;
+        //size_t data = -1;
         void destruct() {
             #ifdef GCDEBUG
             std::cout<< "Object dereferenced" << std::endl;
