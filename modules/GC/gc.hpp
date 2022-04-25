@@ -5,8 +5,13 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <cstdlib>
+#include <string>
+#include <tuple>
+#include <typeinfo>
+#include <sstream>
 
 #include "../LIB/Events.hpp"
+#include "../colors.hpp"
 
 #pragma once
 #ifdef GCDEBUG
@@ -180,12 +185,14 @@ gc_old::Object<T>::operator gc_old::GenericObject() {
     return gc_old::GenericObject(*(data->data));
 }
 namespace gc {
-    using std::vector;
-    using std::unordered_map;
+    using namespace std;
     template <typename T>
     class Object;
     class Generic;
     class GC;
+    inline void print_warning(string msg) {
+        std::cout << COLOR_YELLOW "[GC WARN]: " << msg << COLOR_RESET << std::endl;
+    }
     template <typename T>
     class GCObject;
     enum RefType {
@@ -195,13 +202,11 @@ namespace gc {
     };  
     class GCObjectHead
     {
-    private:
-        EventCaller<> e;
     public:
         friend class GC;
         friend class GCAllocator;
-        vector<GCObjectHead*> object_to_ref;
-        vector<GCObjectHead*> ref_to_object;
+        vector<size_t> object_to_ref;
+        vector<size_t> ref_to_object;
         //ref types
         // strong when object to ref 
         // self when both
@@ -211,24 +216,24 @@ namespace gc {
         size_t getTotalSize();
         size_t getTotalRefs();
         size_t getActiveRefs();
-        Event<> onDestroy;
-        GCObjectHead() :
-            e(onDestroy())
-        {}
         size_t getSelfRefs();
     };
     class GCIterator {
         friend class GC;
         friend class GCAllocator;
+        template <typename T>
+        friend class Object;
         GCObjectHead* head;
         GCAllocator* obj;
+        size_t ind;
         size_t index;
         size_t end;
         GCIterator(size_t head, size_t end, GCAllocator* obj) :
             head((GCObjectHead*)head),
             index(0),
             end(end),
-            obj(obj)
+            obj(obj),
+            ind(0)
         {}
         GCObjectHead& operator*() {
             jumpiferased();
@@ -246,11 +251,13 @@ namespace gc {
         bool isAtEnd() {
             return this->operator*().getTotalSize() + index + sizeof(GCObjectHead) == end;
         }
-        void jumpiferased();
+        inline void jumpiferased();
     };
     class GCAllocator {
         friend class GC;
         friend class GCIterator;
+        template <typename T>
+        friend class Object;
         size_t capacity = 0;
         void* data = nullptr;
         unordered_map<size_t, size_t> erased;
@@ -307,10 +314,12 @@ namespace gc {
     void GCIterator::jumpiferased() {
         if (obj->erased.find(index) != obj->erased.end()) {
             index += obj->erased[index];
+            ++ind;
         }
     }
     GCIterator& GCIterator::operator++(int) {
         index += head->getTotalSize() + sizeof(GCObjectHead);
+        ++ind;
         jumpiferased();
         return *this;
     }
@@ -340,13 +349,13 @@ namespace gc {
             checked.push_back(search);
             for (auto& i : search->ref_to_object)
             {
-                if (i == tochk)
+                if (GC::getObject(i) == tochk)
                 {
                     refs++;
                 }
                 else
                 {
-                    findrecursive(i);
+                    findrecursive(GC::getObject(i));
                 }
             }
         }
@@ -375,7 +384,19 @@ namespace gc {
         template <typename T>
         friend class Object;
         friend class Generic;
+        friend class __RecursiveSelfReferenceFinder;
         GCAllocator allocator;
+        vector<tuple<size_t, void*>> mark_to_delete;
+        
+        static size_t newobj(size_t size) {
+            return GC::getInstance().allocator.allocate(size);
+        }
+        static GCObjectHead* getObject(size_t obj) {
+            return (GCObjectHead*)(obj + (size_t)GC::getInstance().allocator.data);
+        }
+        static void mark(size_t obj, void* obj_) {
+            GC::getInstance().mark_to_delete.push_back(make_tuple(obj, obj_));
+        }
     public:
         //make this a singleton
         static GC& getInstance() {
@@ -384,9 +405,9 @@ namespace gc {
         }
         GC(const GC&) = delete;
         GC& operator=(const GC&) = delete;
-        static void collect() {
+        static void fullcollect() {
             #ifdef GCDEBUG
-            std::cout << "GC collect" << std::endl;
+            std::cout << "GC fullcollect" << std::endl;
             #endif
             /*for (auto& i : GC::getInstance().objects)
             {
@@ -414,7 +435,6 @@ namespace gc {
                     #ifdef GCDEBUG
                     std::cout << "GC delete object" << std::endl;
                     #endif
-                    obj.e();
                     GC::getInstance().allocator.erase(it.index);
                 }
                 it++;
@@ -422,32 +442,54 @@ namespace gc {
             }
             GC::getInstance().allocator.remap_erased();
         }
-        static size_t newobj(size_t size) {
-            return GC::getInstance().allocator.allocate(size);
-        }
-        static GCObjectHead* getObject(size_t obj) {
-            return (GCObjectHead*)(obj + (size_t)GC::getInstance().allocator.data);
+        static void collect() {
+            #ifdef GCDEBUG
+            std::cout << "GC collect" << std::endl;
+            #endif
+            for (const auto& i : GC::getInstance().mark_to_delete) {
+                GCObjectHead* obj = GC::getObject(get<0>(i));
+                size_t sv = obj->getActiveRefs();
+                if (sv != 0) {
+                    stringstream st;
+                    stringstream sts;
+                    st << "0x" << std::hex << (size_t)get<1>(i);
+                    sts << "0x" << std::hex << (size_t)obj;
+                    print_warning("Object pointer " + st.str() + " had some bullshit references, object " + sts.str() + " is still in use with " + std::to_string(sv) + " references.");
+                } else {
+                    #ifdef GCDEBUG
+                    std::cout << "GC delete object" << std::endl;
+                    #endif
+                    delete obj;
+                }
+            }
+            GC::getInstance().allocator.remap_erased();
         }
     };
     template <typename T>
     class Object {
     protected:
-        //size_t data = -1;
+        size_t data = 0;
         void destruct() {
             #ifdef GCDEBUG
             std::cout<< "Object dereferenced" << std::endl;
             #endif
-            if (data != nullptr) {
+            if (data != 0) {
                 long long l = memcheck();
                 #ifdef GCDEBUG
                 std::cout << "GC ptr destruct" << std::endl;
                 #endif
                 if (l != -1) {
-                    data->ref_to_object.erase(std::find(data->ref_to_object.begin(), data->ref_to_object.end(), GC::getInstance().objects[l]));
-                    GC::getInstance().objects[l]->object_to_ref.erase(std::find(GC::getInstance().objects[l]->object_to_ref.begin(), GC::getInstance().objects[l]->object_to_ref.end(), data));
+                    GC::getObject(data)->ref_to_object.erase(std::find(GC::getObject(data)->ref_to_object.begin(), GC::getObject(data)->ref_to_object.end(), l));
+                    GC::getObject(l)->object_to_ref.erase(std::find(GC::getObject(l)->object_to_ref.begin(), GC::getObject(l)->object_to_ref.end(), data));
                 }
-                data->Crefs--;
-                GC_PRINTOBJ_REF(data);
+                GC::getObject(data)->Crefs--;
+                GC_PRINTOBJ_REF(GC::getObject(data));
+                if (GC::getObject(data)->getActiveRefs() == 0) {
+                    #ifdef GCDEBUG
+                    std::cout << "GC delete mark object" << std::endl;
+                    #endif
+                    
+                }
             }
         }
         long long memcheck() {
@@ -463,6 +505,27 @@ namespace gc {
             std::cout << "GC ptr memcheck failed" << std::endl;
             #endif
             return -1;*/
+            size_t b = (size_t)GC::getObject(0);
+            size_t e = (size_t)GC::getObject(GC::getInstance().allocator.capacity);
+            if ((size_t)this > b && (size_t)this < e) {
+                #ifdef GCDEBUG
+                std::cout << "GC ptr memcheck" << std::endl;
+                #endif
+                //continue here
+                GCIterator it = GCIterator(
+                    (size_t)GC::getInstance().allocator.data,
+                    GC::getInstance().allocator.capacity,
+                    &(GC::getInstance().allocator)
+                );
+                it.jumpiferased();
+                while (!it.isAtEnd()) {
+                    if ((size_t)((GCObjectHead*)it) > (size_t)this && (it->size + (size_t)it.head) < (size_t)this) {
+                        return it.index;
+                    }
+                    it++;
+                }
+            }
+            return -1;
         }
         void do_mem() {
             long long l = memcheck();
@@ -471,79 +534,170 @@ namespace gc {
                 std::cout << "Found references to objects" << std::endl;
                 #endif
                 //is in vector
-                if (std::find(data->ref_to_object.begin(), data->ref_to_object.end(), GC::getInstance().objects[l]) != data->ref_to_object.end()) {
+                if (std::find(GC::getObject(data)->ref_to_object.begin(), GC::getObject(data)->ref_to_object.end(), l) != GC::getObject(data)->ref_to_object.end()) {
                     #ifdef GCDEBUG
                     std::cout << "Already processed reference" << std::endl;
                     #endif
                     return;
                 }
-                data->ref_to_object.push_back(GC::getInstance().objects[l]);
-                GC::getInstance().objects[l]->object_to_ref.push_back(data);
+                GC::getObject(data)->ref_to_object.push_back(l);
+                GC::getObject(l)->object_to_ref.push_back(data);
             }
         }
     public:
-        Object() : data(nullptr) {}
-        Object(std::nullptr_t) : data(nullptr) {}
+        Object() : data(0) {}
+        Object(std::nullptr_t) : data(0) {}
         Object(const Object& o) {
             #ifdef GCDEBUG
             std::cout<< "GC object copy" << std::endl;
             #endif
             if (data == nullptr) return;
             data = o.data;
-            data->Crefs++;
+            GC::getObject(data)->Crefs++;
             #ifdef GCDEBUG
             std::cout << "GC new object increment ref" << std::endl;
             #endif
             do_mem();
-            GC_PRINTOBJ_REF(data);
+            GC_PRINTOBJ_REF(GC::getObject(data));
         }
-        Object(const T o) {
+        Object(const T& o) {
             #ifdef GCDEBUG
             std::cout << "GC object move" << std::endl;
             #endif
-            data = new GCObject<T>();
-            data->data = std::move(o);
-            data->Crefs++;
-            GC::add(data);
+            data = GC::allocator.allocate(sizeof(T));
+            GC::getObject(data)->Crefs = 1;
+            ((GCObject<T>*)GC::getObject(data))->data = o;
             do_mem();
             GC_PRINTOBJ_REF(data);
         }
         ~Object() {
             destruct();
+            if (data != nullptr) {
+                if (GC::getObject(data)->getActiveRefs() == 0) 
+            }
         }
         Object& operator=(const Object& o) {
             destruct();
             data = o.data;
-            if (data == nullptr) return *this;
-            data->Crefs++;
+            if (data == 0) return *this;
+            GC::getObject(data)->Crefs++;
             do_mem();
-            GC_PRINTOBJ_REF(data);
+            GC_PRINTOBJ_REF(GC::getObject(data));
             return *this;
         }
         Object& operator=(const T& o) {
             destruct();
-            data = new GCObject<T>();
-            data->data = o;
-            data->Crefs++;
-            GC::add(data);
+            data = GC::allocator.allocate(sizeof(T));
+            GC::getObject(data)->Crefs = 1;
+            ((GCObject<T>*)GC::getObject(data))->data = o;
             do_mem();
-            GC_PRINTOBJ_REF(data);
+            GC_PRINTOBJ_REF(GC::getObject(data));
+            return *this;
+        }
+        Object& operator=(std::nullptr_t) {
+            destruct();
+            data = 0;
             return *this;
         }
         T& operator*() {
-            return data->data;
+            return ((GCObject<T>*)GC::getObject(data))->data;
         }
         T* operator->() {
-            return &(data->data);
+            return &((GCObject<T>*)GC::getObject(data))->data;
         }
         operator T*() {
-            return &(data->data);
+            if (data == 0) return nullptr;
+            return &((GCObject<T>*)GC::getObject(data))->data;
         }
         operator T&() {
-            return data->data;
+            if (data == 0) throw std::runtime_error("Null pointer dereference");
+            return ((GCObject<T>*)GC::getObject(data))->data;
         }
         operator T() {
-            return data->data;
+            if (data == 0) throw std::runtime_error("Null pointer dereference");
+            return ((GCObject<T>*)GC::getObject(data))->data;
+        }
+    };
+    class Generic final : protected Object<void*> {
+    public:
+        Generic() : Object<void*>() {}
+        Generic(std::nullptr_t) : Object<void*>() {}
+        Generic(const Generic& o) : Object<void*>() {
+            #ifdef GCDEBUG
+            std::cout<< "GC object copy" << std::endl;
+            #endif
+            if (data == 0) return;
+            data = o.data;
+            GC::getObject(data)->Crefs++;
+            #ifdef GCDEBUG
+            std::cout << "GC new object increment ref" << std::endl;
+            #endif
+            do_mem();
+            GC_PRINTOBJ_REF(GC::getObject(data));
+        }
+        template <typename T>
+        Generic(const Object<T>& o) : Object<void*>() {
+            #ifdef GCDEBUG
+            std::cout << "GC object copy" << std::endl;
+            #endif
+            data = o.data;
+            GC::getObject(data)->Crefs++;
+            #ifdef GCDEBUG
+            std::cout << "GC new object increment ref" << std::endl;
+            #endif
+            do_mem();
+            GC_PRINTOBJ_REF(GC::getObject(data));
+        }
+        template <typename T>
+        Generic(const T& o) : Object<void*>() {
+            #ifdef GCDEBUG
+            std::cout << "GC object move" << std::endl;
+            #endif
+            data = GC::allocator.allocate(sizeof(T));
+            GC::getObject(data)->Crefs = 1;
+            ((GCObject<T>*)GC::getObject(data))->data = o;
+            do_mem();
+            GC_PRINTOBJ_REF(data);
+        }
+        Generic& operator=(const Generic& o) {
+            destruct();
+            data = o.data;
+            if (data == 0) return *this;
+            GC::getObject(data)->Crefs++;
+            do_mem();
+            GC_PRINTOBJ_REF(GC::getObject(data));
+            return *this;
+        }
+        template <typename T>
+        Generic& operator=(const Object<T>& o) {
+            destruct();
+            data = o.data;
+            if (data == 0) return *this;
+            GC::getObject(data)->Crefs++;
+            do_mem();
+            GC_PRINTOBJ_REF(GC::getObject(data));
+            return *this;
+        }
+        template <typename T>
+        Generic& operator=(const T& o) {
+            destruct();
+            data = GC::allocator.allocate(sizeof(T));
+            GC::getObject(data)->Crefs = 1;
+            ((GCObject<T>*)GC::getObject(data))->data = o;
+            do_mem();
+            GC_PRINTOBJ_REF(GC::getObject(data));
+            return *this;
+        }
+        Generic& operator=(std::nullptr_t) {
+            destruct();
+            data = 0;
+            return *this;
+        }
+        template <typename T>
+        T& try_cast() {
+            if (data == 0) throw std::runtime_error("Null pointer dereference");
+            if (GC::getObject(data)->size != sizeof(T)) throw std::bad_cast("Invalid cast");
+            return ((GCObject<T>*)GC::getObject(data))->data;
         }
     };
 }
