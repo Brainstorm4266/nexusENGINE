@@ -23,7 +23,7 @@ unsigned long long roundinchunks(unsigned long long num, unsigned long long chun
     if ((num % chunksize) == 0) return num;
     return (chunksize - (num % chunksize) + num);
 }
-namespace gc_old {
+/*namespace gc_old {
     using std::vector;
     template <typename T>
     class _GCHead 
@@ -183,7 +183,7 @@ gc_old::GenericObject::operator gc_old::Object<T>() {
 template <typename T>
 gc_old::Object<T>::operator gc_old::GenericObject() {
     return gc_old::GenericObject(*(data->data));
-}
+}*/
 namespace gc {
     using namespace std;
     template <typename T>
@@ -217,6 +217,9 @@ namespace gc {
         size_t getTotalRefs();
         size_t getActiveRefs();
         size_t getSelfRefs();
+        GCObjectHead(size_t size, size_t arrlen)
+            : Crefs(0), size(size), arrlen(arrlen)
+        {}
     };
     class GCIterator {
         friend class GC;
@@ -268,7 +271,9 @@ namespace gc {
                 if (data == nullptr) data = malloc(capacity);
                 else data = realloc(data, capacity);
             }
-            (*((GCObjectHead*)(capacity-newcap + (size_t)data))) = GCObjectHead();
+            char* ptr = (char*)(capacity-newcap + (size_t)data);
+            GCObjectHead&& head = GCObjectHead(size,1);
+            memcpy(ptr, &head, newcap);
             return capacity-newcap;
         };
         void remap_erased() {
@@ -293,7 +298,7 @@ namespace gc {
             for (auto& i : erased) {
                 if (i.second >= newcap) {
                     GCObjectHead* ret = (GCObjectHead*)(i.first + (size_t)data);
-                    (*ret) = GCObjectHead();
+                    (*ret) = GCObjectHead(size,1);
                     erased.erase(i.first);
                     if (i.second > newcap) {
                         erased[i.first + newcap] = i.second - newcap;
@@ -342,23 +347,7 @@ namespace gc {
             if (refs < 0) return 0;
             return refs;
         }
-        void findrecursive(GCObjectHead* search)
-        {
-            if (std::find(checked.begin(), checked.end(), search) != checked.end()) return;
-            refs-= search->Crefs - search->ref_to_object.size();
-            checked.push_back(search);
-            for (auto& i : search->ref_to_object)
-            {
-                if (GC::getObject(i) == tochk)
-                {
-                    refs++;
-                }
-                else
-                {
-                    findrecursive(GC::getObject(i));
-                }
-            }
-        }
+        void findrecursive(GCObjectHead* search);
     };
     size_t GCObjectHead::getSelfRefs() {
         return __RecursiveSelfReferenceFinder().start(this);
@@ -373,9 +362,7 @@ namespace gc {
     class GCObject final : public GCObjectHead
     {
     public:
-        GCObject() : GCObjectHead() {
-            this->size = sizeof(T);
-        };
+        GCObject() : GCObjectHead(sizeof(T),1) {}
         T data;
     };
     class GC final {
@@ -409,18 +396,6 @@ namespace gc {
             #ifdef GCDEBUG
             std::cout << "GC fullcollect" << std::endl;
             #endif
-            /*for (auto& i : GC::getInstance().objects)
-            {
-                GC_PRINTOBJ_REF(i);
-                if (i->getActiveRefs() == 0) {
-                    #ifdef GCDEBUG
-                    std::cout << "GC delete object" << std::endl;
-                    #endif
-                    i->e();
-                    delete i;
-                    GC::getInstance().objects.erase(std::find(GC::getInstance().objects.begin(), GC::getInstance().objects.end(), i));
-                }
-            }*/
             GCIterator it = GCIterator(
                 (size_t)GC::getInstance().allocator.data,
                 GC::getInstance().allocator.capacity,
@@ -435,6 +410,12 @@ namespace gc {
                     #ifdef GCDEBUG
                     std::cout << "GC delete object" << std::endl;
                     #endif
+                    for (size_t& o : obj.ref_to_object) {
+                        GC::getObject(o)->object_to_ref.erase(std::find(GC::getObject(o)->object_to_ref.begin(), GC::getObject(o)->object_to_ref.end(), it.index));
+                    }
+                    for (size_t& o : obj.object_to_ref) {
+                        GC::getObject(o)->ref_to_object.erase(std::find(GC::getObject(o)->ref_to_object.begin(), GC::getObject(o)->ref_to_object.end(), it.index));
+                    }
                     GC::getInstance().allocator.erase(it.index);
                 }
                 it++;
@@ -447,33 +428,55 @@ namespace gc {
             std::cout << "GC collect" << std::endl;
             #endif
             for (const auto& i : GC::getInstance().mark_to_delete) {
-                GCObjectHead* obj = GC::getObject(get<0>(i));
-                size_t sv = obj->getActiveRefs();
+                size_t obj = get<0>(i);
+                size_t sv = GC::getObject(obj)->getActiveRefs();
                 if (sv != 0) {
                     stringstream st;
                     stringstream sts;
                     st << "0x" << std::hex << (size_t)get<1>(i);
-                    sts << "0x" << std::hex << (size_t)obj;
+                    sts << "0x" << std::hex << (size_t)GC::getObject(obj);
                     print_warning("Object pointer " + st.str() + " had some bullshit references, object " + sts.str() + " is still in use with " + std::to_string(sv) + " references.");
                 } else {
                     #ifdef GCDEBUG
                     std::cout << "GC delete object" << std::endl;
                     #endif
-                    delete obj;
+                    for (size_t& o : GC::getObject(obj)->ref_to_object) {
+                        GC::getObject(o)->object_to_ref.erase(std::find(GC::getObject(o)->object_to_ref.begin(), GC::getObject(o)->object_to_ref.end(), obj));
+                    }
+                    for (size_t& o : GC::getObject(obj)->object_to_ref) {
+                        GC::getObject(o)->ref_to_object.erase(std::find(GC::getObject(o)->ref_to_object.begin(), GC::getObject(o)->ref_to_object.end(), obj));
+                    }
+                    GC::getInstance().allocator.erase(obj);
                 }
             }
             GC::getInstance().allocator.remap_erased();
         }
     };
+    void __RecursiveSelfReferenceFinder::findrecursive(GCObjectHead* search) {
+            if (std::find(checked.begin(), checked.end(), search) != checked.end()) return;
+            refs-= search->Crefs - search->ref_to_object.size();
+            checked.push_back(search);
+            for (auto& i : search->ref_to_object)
+            {
+                if (GC::getObject(i) == tochk)
+                {
+                    refs++;
+                }
+                else
+                {
+                    findrecursive(GC::getObject(i));
+                }
+            }
+        }
     template <typename T>
     class Object {
     protected:
-        size_t data = 0;
+        size_t data = -1;
         void destruct() {
             #ifdef GCDEBUG
             std::cout<< "Object dereferenced" << std::endl;
             #endif
-            if (data != 0) {
+            if (data != -1) {
                 long long l = memcheck();
                 #ifdef GCDEBUG
                 std::cout << "GC ptr destruct" << std::endl;
@@ -488,7 +491,7 @@ namespace gc {
                     #ifdef GCDEBUG
                     std::cout << "GC delete mark object" << std::endl;
                     #endif
-                    
+                    GC::mark(data, this);
                 }
             }
         }
@@ -545,13 +548,13 @@ namespace gc {
             }
         }
     public:
-        Object() : data(0) {}
-        Object(std::nullptr_t) : data(0) {}
+        Object() : data(-1) {}
+        Object(std::nullptr_t) : data(-1) {}
         Object(const Object& o) {
             #ifdef GCDEBUG
             std::cout<< "GC object copy" << std::endl;
             #endif
-            if (data == nullptr) return;
+            if (data == -1) return;
             data = o.data;
             GC::getObject(data)->Crefs++;
             #ifdef GCDEBUG
@@ -564,22 +567,22 @@ namespace gc {
             #ifdef GCDEBUG
             std::cout << "GC object move" << std::endl;
             #endif
-            data = GC::allocator.allocate(sizeof(T));
+            data = GC::getInstance().allocator.allocate(sizeof(T));
             GC::getObject(data)->Crefs = 1;
             ((GCObject<T>*)GC::getObject(data))->data = o;
             do_mem();
-            GC_PRINTOBJ_REF(data);
+            GC_PRINTOBJ_REF(GC::getObject(data));
         }
         ~Object() {
             destruct();
-            if (data != nullptr) {
-                if (GC::getObject(data)->getActiveRefs() == 0) 
+            if (data != -1) {
+                if (GC::getObject(data)->getActiveRefs() == -1) GC::mark(data,this);
             }
         }
         Object& operator=(const Object& o) {
             destruct();
             data = o.data;
-            if (data == 0) return *this;
+            if (data == -1) return *this;
             GC::getObject(data)->Crefs++;
             do_mem();
             GC_PRINTOBJ_REF(GC::getObject(data));
@@ -587,7 +590,7 @@ namespace gc {
         }
         Object& operator=(const T& o) {
             destruct();
-            data = GC::allocator.allocate(sizeof(T));
+            data = GC::getInstance().allocator.allocate(sizeof(T));
             GC::getObject(data)->Crefs = 1;
             ((GCObject<T>*)GC::getObject(data))->data = o;
             do_mem();
@@ -596,7 +599,7 @@ namespace gc {
         }
         Object& operator=(std::nullptr_t) {
             destruct();
-            data = 0;
+            data = -1;
             return *this;
         }
         T& operator*() {
@@ -606,16 +609,20 @@ namespace gc {
             return &((GCObject<T>*)GC::getObject(data))->data;
         }
         operator T*() {
-            if (data == 0) return nullptr;
+            if (data == -1) return nullptr;
             return &((GCObject<T>*)GC::getObject(data))->data;
         }
-        operator T&() {
-            if (data == 0) throw std::runtime_error("Null pointer dereference");
+        //operator T&() {
+        //    if (data == -1) throw std::runtime_error("Null pointer dereference");
+        //    return ((GCObject<T>*)GC::getObject(data))->data;
+        //}
+        operator T() {
+            if (data == -1) throw std::runtime_error("Null pointer dereference");
             return ((GCObject<T>*)GC::getObject(data))->data;
         }
-        operator T() {
-            if (data == 0) throw std::runtime_error("Null pointer dereference");
-            return ((GCObject<T>*)GC::getObject(data))->data;
+        std::ostream& operator << (std::ostream& co) {
+            co << ((GCObject<T>*)GC::getObject(data))->data;
+            return co;
         }
     };
     class Generic final : protected Object<void*> {
@@ -626,7 +633,7 @@ namespace gc {
             #ifdef GCDEBUG
             std::cout<< "GC object copy" << std::endl;
             #endif
-            if (data == 0) return;
+            if (data == -1) return;
             data = o.data;
             GC::getObject(data)->Crefs++;
             #ifdef GCDEBUG
@@ -662,7 +669,7 @@ namespace gc {
         Generic& operator=(const Generic& o) {
             destruct();
             data = o.data;
-            if (data == 0) return *this;
+            if (data == -1) return *this;
             GC::getObject(data)->Crefs++;
             do_mem();
             GC_PRINTOBJ_REF(GC::getObject(data));
@@ -672,7 +679,7 @@ namespace gc {
         Generic& operator=(const Object<T>& o) {
             destruct();
             data = o.data;
-            if (data == 0) return *this;
+            if (data == -1) return *this;
             GC::getObject(data)->Crefs++;
             do_mem();
             GC_PRINTOBJ_REF(GC::getObject(data));
@@ -690,12 +697,12 @@ namespace gc {
         }
         Generic& operator=(std::nullptr_t) {
             destruct();
-            data = 0;
+            data = -1;
             return *this;
         }
         template <typename T>
         T& try_cast() {
-            if (data == 0) throw std::runtime_error("Null pointer dereference");
+            if (data == -1) throw std::runtime_error("Null pointer dereference");
             if (GC::getObject(data)->size != sizeof(T)) throw std::bad_cast("Invalid cast");
             return ((GCObject<T>*)GC::getObject(data))->data;
         }
