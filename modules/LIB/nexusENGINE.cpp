@@ -1,14 +1,6 @@
 #define RUN_NEXUSENGINE_AS_MAIN
 #ifdef RUN_NEXUSENGINE_AS_MAIN
 #include "nexusENGINE.hpp"
-void test_event_k_down(unsigned long long a, unsigned long long b) {
-    debug_print("Event call key down:",a,b);
-    debug_print("Keys down:",nexusWindow::getKeysDown());
-}
-void test_event_k_up(unsigned long long a, unsigned long long b) {
-    debug_print("Event call key up:",a);
-    debug_print("Keys down:",nexusWindow::getKeysDown());
-}
 int CALLBACK WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance, 
                      LPSTR lpCmdLine, 
@@ -19,8 +11,14 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     #else
     nexusWindow *w = nexusWindow::newinst("nexusEngine",{640,480});
     #endif
-    w->KeyDownEvent.Connect(test_event_k_down);
-    w->KeyUpEvent.Connect(test_event_k_up);
+    w->KeyDownEvent.Connect([](unsigned long long a, unsigned long long b) {
+        debug_print("Event call key down:",a,b);
+        debug_print("Keys down:",nexusWindow::getKeysDown());
+    });
+    w->KeyUpEvent.Connect([](unsigned long long a, unsigned long long b) {
+        debug_print("Event call key up:",a);
+        debug_print("Keys down:",nexusWindow::getKeysDown());
+    });
     MSG msg;
     BOOL gResult;
     while (gResult = GetMessage(&msg,nullptr,0,0) > 0) {
