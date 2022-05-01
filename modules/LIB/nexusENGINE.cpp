@@ -1,6 +1,13 @@
 #define RUN_NEXUSENGINE_AS_MAIN
 #ifdef RUN_NEXUSENGINE_AS_MAIN
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
 #include "nexusENGINE.hpp"
+#include "win.hpp"
 int CALLBACK WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance, 
                      LPSTR lpCmdLine, 
