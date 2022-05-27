@@ -1,6 +1,6 @@
 #include "Mathlib.hpp"
 
-float Math::reverse_sqrt(float number) {
+float Math::inverse_sqrt(float number) {
     long i;
     float x2, y;
     const float threehalfs = 1.5F;
