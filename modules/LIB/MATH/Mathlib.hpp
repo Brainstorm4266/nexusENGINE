@@ -1,4 +1,4 @@
 class Math {
 public:
-    static float reverse_sqrt( float number );
+    static float inverse_sqrt( float number );
 };
