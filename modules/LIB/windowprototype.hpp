@@ -1,9 +1,17 @@
 #pragma once
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
 #include "vectors.hpp"
 #include "nexusObject.hpp"
 #include "win.hpp"
 #include "Events.hpp"
-#include <iostream>
+#include "../DEBUG/debug.hpp"
+#include "nxeExc.hpp"
+#include "isInVector.hpp"
+
 
 enum keyState {
     KEY_UP,
@@ -182,121 +190,381 @@ enum Key {
     KEY_CODE_NONE = 0xFFFF,
 };
 
-class __nexusWindow 
-{
-    WNDCLASSEX wc;
-    friend class nexusWindow;
-    HWND hWnd;
-    LPCWSTR title;
-    nexusWindow* n;
-    static __nexusWindow* inst;
-    __nexusWindow(HINSTANCE hInstance,LPCWSTR title, Vec2 resolution) {
-        auto pClassName = L"hw3dbutts";
-        this->inst = this;
-        this->title = title;
-        FreeConsole();
-        this->n = n;
-        this->wc = {0};
-        this->wc.cbSize = sizeof(this->wc);
-        this->wc.style = CS_OWNDC;
-        this->wc.lpfnWndProc = this->WndProc;
-        this->wc.cbClsExtra = 0;
-        this->wc.cbWndExtra = 0;
-        this->wc.hInstance = hInstance;
-        this->wc.hIcon = nullptr;
-        this->wc.hCursor = nullptr;
-        this->wc.hbrBackground = nullptr;
-        this->wc.lpszMenuName = nullptr;
-        this->wc.lpszClassName = pClassName;
-        this->wc.hIconSm = nullptr;
-        RegisterClassEx(&(this->wc));
-        this->hWnd = CreateWindowEx(
-            0,pClassName,
-            title,
-            WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
-            200,200,resolution.x,resolution.y,
-            nullptr,nullptr,hInstance,nullptr);
-        ShowWindow(this->hWnd,SW_SHOW);
-    }
-    static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+namespace __windowprototype {
+    class __nexusWindow 
     {
-        switch (message)
+        WNDCLASSEX wc;
+        friend class nexusWindow;
+        HWND hWnd;
+        LPCWSTR title;
+        HINSTANCE hInstanceV;
+        nexusWindow* n;
+        __nexusWindow(LPCWSTR title, Vec2 resolution)
+            : title(title), hInstanceV(GetModuleHandle(nullptr)), n(nullptr)
+        {
+            auto pClassName = L"hw3dbutts";
+            FreeConsole();
+            this->wc = {0};
+            this->wc.cbSize = sizeof(this->wc);
+            this->wc.style = CS_OWNDC;
+            this->wc.lpfnWndProc = this->WndProc;
+            this->wc.cbClsExtra = 0;
+            this->wc.cbWndExtra = 0;
+            this->wc.hInstance = hInstanceV;
+            this->wc.hIcon = nullptr;
+            this->wc.hCursor = nullptr;
+            this->wc.hbrBackground = nullptr;
+            this->wc.lpszMenuName = nullptr;
+            this->wc.lpszClassName = pClassName;
+            this->wc.hIconSm = nullptr;
+            RegisterClassEx(&(this->wc));
+            this->hWnd = CreateWindowEx(
+                0,pClassName,
+                title,
+                WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
+                200,200,resolution.x,resolution.y,
+                nullptr,nullptr,hInstanceV,nullptr);
+            ShowWindow(this->hWnd,SW_SHOW);
+            UpdateWindow(this->hWnd);
+        }
+        static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+    public:
+        __nexusWindow() = delete;
+        __nexusWindow(__nexusWindow&) = delete;
+        __nexusWindow(__nexusWindow&&) = delete;
+        __nexusWindow& operator=(__nexusWindow&) = delete;
+        ~__nexusWindow() {
+            // send debug message "Goodbye."
+            OutputDebugString(L"Goodbye.\n");
+            DestroyWindow(this->hWnd);
+            UnregisterClass(this->wc.lpszClassName,this->wc.hInstance);
+        }
+    };
+    Event<unsigned long long,unsigned long long> _KeyUpEvent;
+    Event<unsigned long long,unsigned long long> _KeyDownEvent;
+    Event<unsigned long long,unsigned long long> _KeyCharEvent;
+    Event<Key,long,long> _MouseUpEvent;
+    Event<Key,long,long> _MouseDownEvent;
+    EventCaller<unsigned long long,unsigned long long> _KeyUpCall = _KeyUpEvent();
+    EventCaller<unsigned long long,unsigned long long> _KeyDownCall = _KeyDownEvent();
+    EventCaller<unsigned long long,unsigned long long> _KeyCharCall = _KeyCharEvent();
+    EventCaller<Key,long,long> _MouseUpCall = _MouseUpEvent();
+    EventCaller<Key,long,long> _MouseDownCall = _MouseDownEvent();
+    class __nexusWindow;
+    class nexusWindow;
+    nexusWindow* inst = nullptr;
+    __nexusWindow *_w = nullptr;
+    class nexusWindow 
+    {
+    public:
+        friend class __nexusWindow;
+        HWND& __getHandle() {
+            return _w->hWnd;
+        }
+        class Exception : public nexusException
+        {
+        public:
+            Exception(int line, const char* file, HRESULT hr) noexcept;
+            const char* what() const noexcept override;
+            virtual const char* getType() const noexcept;
+            static std::string TranslateErrorCode(HRESULT hr) noexcept;
+            HRESULT GetErrorCode() const noexcept;
+            std::string GetErrorString() const noexcept;
+        private:
+            HRESULT hr;
+        };
+        nexusWindow() = delete;
+        nexusWindow(nexusWindow const&)     = delete;
+        void operator=(nexusWindow const&)  = delete;
+        static nexusWindow* newinst(string title, Vec2 res) {
+            if (inst == nullptr) inst = new nexusWindow(title,res,true);
+            return inst;
+        }
+        static nexusWindow* getinst() {
+            return inst;
+        }
+        Event<unsigned long long,unsigned long long>& KeyUpEvent = _KeyUpEvent;
+        Event<unsigned long long,unsigned long long>& KeyDownEvent = _KeyDownEvent;
+        Event<unsigned long long,unsigned long long>& KeyCharEvent = _KeyCharEvent;
+        Event<Key,long,long>& MouseUpEvent = _MouseUpEvent;
+        Event<Key,long,long>& MouseDownEvent = _MouseDownEvent;
+        static Vec2 getMousePos() {
+            POINT p;
+            GetCursorPos(&p);
+            return Vec2(p.x,p.y);
+        }
+        static std::vector<Key> getKeysDown() {
+            return nexusWindow::getinst()->keysdown;
+        }
+    protected:
+        nexusWindow(string title, Vec2 res, bool);
+    private:
+        std::vector<Key> keysdown;
+    };
+    nexusWindow::nexusWindow(string title, Vec2 res, bool) {
+        std::wstring stemp = std::wstring(title.begin(), title.end());
+        LPCWSTR sw = stemp.c_str();
+        _w = new __nexusWindow(sw, res);
+    }
+    LRESULT CALLBACK __nexusWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+        {
+            try {
+                switch (message)
+                {
+                case WM_CLOSE:
+                    PostQuitMessage(wParam);
+                    break;
+                case WM_LBUTTONDOWN:
+                    if (wParam == 1) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseDownCall(LMB,pos.x,pos.y);
+                    }
+                case WM_MBUTTONDOWN:
+                    if (wParam == 2) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseDownCall(MMB,pos.x,pos.y);
+                    }            
+                case WM_RBUTTONDOWN:
+                    if (wParam == 3) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseDownCall(RMB,pos.x,pos.y);
+                    }
+                case WM_KEYDOWN:
+                    if (!isInVector(nexusWindow::getinst()->keysdown,(Key)wParam)) {
+                        nexusWindow::getinst()->keysdown.push_back((Key)wParam);
+                        _KeyDownCall(wParam,lParam);
+                    }
+                    return 0;
+                case WM_LBUTTONUP:
+                    if (true) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseUpCall(LMB,pos.x,pos.y);
+                    }
+                    if (isInVector(nexusWindow::getinst()->keysdown, Key::LMB)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), Key::LMB), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(Key::LMB,lParam);
+                    }
+                    return 0;
+                case WM_MBUTTONUP:
+                    if (true) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseUpCall(MMB,pos.x,pos.y);
+                    }
+                    if (isInVector(nexusWindow::getinst()->keysdown, Key::MMB)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), Key::MMB), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(Key::MMB,lParam);
+                    }
+                    return 0;
+                case WM_RBUTTONUP:
+                    if (true) {
+                        POINT pos;
+                        GetCursorPos(&pos);
+                        _MouseUpCall(RMB,pos.x,pos.y);
+                    }
+                    if (isInVector(nexusWindow::getinst()->keysdown, Key::RMB)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), Key::RMB), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(Key::RMB,lParam);
+                    }
+                    return 0;
+                case WM_KEYUP:
+                    if (isInVector(nexusWindow::getinst()->keysdown,(Key)wParam)) {
+                        nexusWindow::getinst()->keysdown.erase(std::remove(nexusWindow::getinst()->keysdown.begin(), nexusWindow::getinst()->keysdown.end(), (Key)wParam), nexusWindow::getinst()->keysdown.end());
+                        _KeyUpCall(wParam,lParam);
+                    }
+                    return 0;
+                case WM_CHAR:
+                    _KeyCharCall(wParam,lParam);
+                    return 0;
+                }
+                return DefWindowProc(hWnd, message, wParam, lParam);
+            }
+            catch (const nexusException& e) {
+                std::string ewhatst = e.what();
+                std::wstring ewhat = std::wstring(ewhatst.begin(), ewhatst.end());
+                std::string etypest = e.GetType();
+                std::wstring etype = std::wstring(etypest.begin(), etypest.end());
+                MessageBox(nullptr, ewhat.c_str(), etype.c_str(), MB_OK | MB_ICONERROR);
+            }
+            catch (const std::exception& e) {
+                std::string ewhatst = e.what();
+                std::wstring ewhat = std::wstring(ewhatst.begin(), ewhatst.end());
+                MessageBox(nullptr, ewhat.c_str(), L"Std exception", MB_OK | MB_ICONERROR);
+            }
+            catch (...) {
+                MessageBox(nullptr, L"No details available.", L"Unknown error", MB_OK | MB_ICONERROR);
+            }
+            return -1;
+        };
+    nexusWindow::Exception::Exception(int line, const char* file, HRESULT hr) noexcept
+        :
+        nexusException(line,file),
+        hr(hr)
+    {}
+    const char* nexusWindow::Exception::what() const noexcept
+    {
+        std::ostringstream oss;
+        oss << GetType() << std::endl
+            << "[Error Code] 0x" << std::hex << std::uppercase << GetErrorCode() <<std::endl
+            << "[Description] " << GetErrorString() << std::endl
+            << GetOrigin();
+        whatBuffer = oss.str();
+        return whatBuffer.c_str();
+    }
+    const char* nexusWindow::Exception::getType() const noexcept
+    {
+        return "nxE Window Exception";
+    }
+    std::string nexusWindow::Exception::TranslateErrorCode(HRESULT hr) noexcept
+    {
+        wchar_t* pMsgBuf = nullptr;
+        DWORD nMsgLen = FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+            nullptr,
+            hr,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            reinterpret_cast<LPWSTR>(&pMsgBuf),
+            0,
+            nullptr
+        );
+        if (nMsgLen == 0)
+        {
+            return "undefined";
+        }
+        std::wstring ErrMsg = pMsgBuf;
+        LocalFree(pMsgBuf);
+        std::string ErrMsgStd = std::string(ErrMsg.begin(), ErrMsg.end());
+        return ErrMsgStd;
+    }
+    HRESULT nexusWindow::Exception::GetErrorCode() const noexcept
+    {
+        return hr;
+    }
+    std::string nexusWindow::Exception::GetErrorString() const noexcept
+    {
+        return TranslateErrorCode(GetErrorCode());
+    }
+}
+using __windowprototype::nexusWindow;
+#define nxEWnd_Except(hr) nexusWindow::Exception(__LINE__,__FILE__,hr)
+/*namespace __windowprototype2 {
+    class nexusWindow
+    {
+    public:
+        class WndCls 
+        {
+        public:
+            static const wchar_t* GetName() noexcept;
+            static HINSTANCE GetInstance() noexcept;
+        private:
+            WndCls() noexcept;
+            ~WndCls();
+            WndCls(WndCls const&) = delete;
+            WndCls& operator=(WndCls const&) = delete;
+            static constexpr const wchar_t* wndClassName = L"nexusEngine";
+            static WndCls wndClass;
+            HINSTANCE hInstance;
+        };
+    public:
+        nexusWindow(int width, int height, const wchar_t* name) noexcept;
+        ~nexusWindow();
+        nexusWindow(nexusWindow const&) = delete;
+        nexusWindow& operator=(nexusWindow const&) = delete;
+    private:
+        static LRESULT CALLBACK HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept;
+        static LRESULT CALLBACK HandleMsgThunk(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept;
+        LRESULT HandleMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept;
+        int width;
+        int height;
+        HWND handle;
+    };
+    nexusWindow::WndCls::WndCls() noexcept
+        :
+        hInstance(GetModuleHandle(nullptr))
+    {
+        WNDCLASSEX wc = {};
+        wc.cbSize = sizeof(WNDCLASSEX);
+        wc.lpfnWndProc = HandleMsgSetup;
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hInstance = GetInstance();
+        wc.hIcon = nullptr;
+        wc.hCursor = nullptr;
+        wc.hbrBackground = nullptr;
+        wc.lpszMenuName = nullptr;
+        wc.lpszClassName = GetName();
+        wc.hIconSm = nullptr;
+        RegisterClassEx(&wc);
+    }
+    nexusWindow::WndCls::~WndCls()
+    {
+        UnregisterClass(GetName(), GetInstance());
+    }
+    const wchar_t* nexusWindow::WndCls::GetName() noexcept
+    {
+        return wndClassName;
+    }
+    HINSTANCE nexusWindow::WndCls::GetInstance() noexcept
+    {
+        return wndClass.hInstance;
+    }
+    nexusWindow::nexusWindow(int width, int height, const wchar_t* name) noexcept
+        :
+        width(width),
+        height(height)
+    {
+        RECT wr;
+        wr.left = 100;
+        wr.right = wr.left + width;
+        wr.top = 100;
+        wr.bottom = wr.top + height;
+        handle = CreateWindowExW(
+            0,
+            WndCls::GetName(),
+            name,
+            (DWORD)(WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU),
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            wr.right - wr.left,
+            wr.bottom - wr.top,
+            nullptr,
+            nullptr,
+            WndCls::GetInstance(),
+            this
+        );
+        ShowWindow(handle, SW_SHOW);
+        UpdateWindow(handle);
+    }
+    nexusWindow::~nexusWindow()
+    {
+        DestroyWindow(handle);
+    }
+    LRESULT WINAPI nexusWindow::HandleMsgSetup(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (msg == WM_NCCREATE)
+        {
+            const CREATESTRUCTW* const pCreate = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            nexusWindow* const pWnd = static_cast<nexusWindow*>(pCreate->lpCreateParams);
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pWnd));
+            SetWindowLongPtr(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&nexusWindow::HandleMsgThunk));
+            return pWnd->HandleMsg(hWnd, msg, wParam, lParam);
+        }
+        return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+    LRESULT WINAPI nexusWindow::HandleMsgThunk(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        switch(msg)
         {
         case WM_CLOSE:
             PostQuitMessage(0);
-            break;
-        case WM_LBUTTONDOWN:
-        case WM_MBUTTONDOWN:
-        case WM_RBUTTONDOWN:
-        case WM_KEYDOWN:
-            OutputDebugString((L"Key down: " + std::to_wstring(wParam) + L"\n").c_str());
-            nexusWindow::KeyDownCall(wParam,lParam);
-            return 0;
-        case WM_LBUTTONUP:
-            OutputDebugString((L"Key up LB: " + std::to_wstring(wParam) + L"\n").c_str());
-            nexusWindow::KeyUpCall(Key::LMB,lParam);
-            return 0;
-        case WM_MBUTTONUP:
-            OutputDebugString((L"Key up MB: " + std::to_wstring(wParam) + L"\n").c_str());
-            nexusWindow::KeyUpCall(Key::MMB,lParam);
-            return 0;
-        case WM_RBUTTONUP:
-            OutputDebugString((L"Key up RB: " + std::to_wstring(wParam) + L"\n").c_str());
-            nexusWindow::KeyUpCall(Key::RMB,lParam);
-            return 0;
-        case WM_KEYUP:
-            OutputDebugString((L"Key up: " + std::to_wstring(wParam) + L"\n").c_str());
-            nexusWindow::KeyUpCall(wParam,lParam);
-            return 0;
-        case WM_CHAR:
-            OutputDebugString((L"Char: " + std::to_wstring(wParam) + L"\n").c_str());
-            nexusWindow::CharCall(wParam,lParam);
             return 0;
         }
-        return DefWindowProc(hWnd, message, wParam, lParam);
-    };
-};
-class nexusWindow 
-{
-public:
-    friend class __nexusWindow;
-    void drawLine2D(Vec2, Vec2);
-    void drawPolygon(Vec2, Vec2, Vec2);
-    void drawLine3D(Vec3, Vec3);
-    void drawPolygon(Vec3, Vec3, Vec3);
-    HWND& __getHandle() {
-        return this->_w->hWnd;
+        return DefWindowProc(hWnd, msg, wParam, lParam);
     }
-    nexusWindow() = delete;
-    nexusWindow(nexusWindow const&)     = delete;
-    void operator=(nexusWindow const&)  = delete;
-    static nexusWindow* newinst(HINSTANCE hInstance, string title, Vec2 res) {
-        if (inst != nullptr) return new nexusWindow(hInstance,title,res,inst);
-        else return nexusWindow::inst;
-    }
-    static nexusWindow* getinst() {
-        return nexusWindow::inst;
-    }
-    static Event<long long, long long> KeyUp;
-    static Event<long long, long long> KeyDown;
-    static Event<long long, long long> CharInput;
-
-protected:
-    nexusWindow(HINSTANCE hInstance, string title, Vec2 res, bool);
-    static nexusWindow* inst;
-    static __nexusWindow *_w;
-    static EventCaller<long long, long long> KeyUpCall;
-    static EventCaller<long long, long long> KeyDownCall;
-    static EventCaller<long long, long long> CharCall;
-};
-nexusWindow::nexusWindow(HINSTANCE hInstance, string title, Vec2 res, bool) {
-    std::wstring stemp = std::wstring(title.begin(), title.end());
-    LPCWSTR sw = stemp.c_str();
-    KeyUp = Event<long long, long long>();
-    KeyDown = Event<long long, long long>();
-    CharInput = Event<long long, long long>();
-    KeyUpCall = KeyUp();
-    KeyDownCall = KeyDown();
-    CharCall = CharInput();
-    this->_w = new __nexusWindow(hInstance, sw, res);
-}
+}*/

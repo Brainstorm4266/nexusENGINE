@@ -31,8 +31,7 @@ using std::unordered_map;
 #define vnObj _vnObj*
 #define lnObj _lnObj*
 
-#define STRINGIFY2(X) #X
-#define STRINGIFY(X) STRINGIFY2(X)
+#define STRINGIFY(X) #X
 
 class _nType;
 class _nObj;
@@ -58,6 +57,8 @@ class _InternalException {
 public:
     string excinfo;
     InternalExceptionTypes type = UNKNOWN;
+    _InternalException() {};
+    _InternalException(string info, InternalExceptionTypes type = UNKNOWN) : excinfo(info), type(type) {}
     const bool internal = true;
     virtual void finalize() {
         this->finalized = true;
@@ -162,8 +163,8 @@ public:
 struct dictkey {
     string key;
     unsigned long long v;
-    static dictkey& createfromstring(string s, MainInterpreter i);
-    static dictkey& createfromobj(snObj o);
+    static dictkey createfromstring(string s, MainInterpreter i);
+    static dictkey createfromobj(snObj o);
 };
 bool operator == (const dictkey& a, const dictkey& b) {
     return a.key == b.key && a.v == b.v;
@@ -722,7 +723,7 @@ _nType::_nType(MainInterpreter i) : _nObj(i) {
     this->funcs["__iter__"] = BaseObjFuncs::iter;
     this->funcs["__next__"] = BaseObjFuncs::next;
 }
-dictkey& dictkey::createfromstring(string s, MainInterpreter i){
+dictkey dictkey::createfromstring(string s, MainInterpreter i){
     dictkey t;
     t.key = s;
     snObj so = new _snObj(i);
@@ -731,7 +732,7 @@ dictkey& dictkey::createfromstring(string s, MainInterpreter i){
     so->decref();
     return t;
 }
-dictkey& dictkey::createfromobj(snObj o){
+dictkey dictkey::createfromobj(snObj o){
     dictkey t;
     t.key = o->sval;
     t.v = __hash::hashobj(o);
