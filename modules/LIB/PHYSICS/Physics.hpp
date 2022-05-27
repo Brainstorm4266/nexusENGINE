@@ -1,3 +1,5 @@
+#pragma once
+
 class Gravity {
 public:
     static float getGravity(float mass, float newton_per_kg);
