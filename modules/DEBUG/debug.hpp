@@ -90,6 +90,8 @@ namespace __debug {
         string sv = ss.str();
         wstring ws = std::wstring(sv.begin(), sv.end());
         OutputDebugString(ws.c_str());
+
+        cout << ws.c_str();
     }
     template <typename T>
     ostream& operator << (ostream& o,vector<T> v) {

@@ -14,9 +14,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
                      int nCmdShow)
 {   
     #ifndef NDEBUG
-    nexusWindow *w = nexusWindow::newinst("nexusEngine - Debug Mode",{640,480});
+    nexusWindow *w = nexusWindow::newinst("nexusENGINE - Debug Mode",{640,480});
+    AllocConsole();
     #else
-    nexusWindow *w = nexusWindow::newinst("nexusEngine",{640,480});
+    nexusWindow *w = nexusWindow::newinst("nexusENGINE",{640,480});
     #endif
     w->KeyDownEvent.Connect([](unsigned long long a, unsigned long long b) {
         debug_print("Event call key down:",a,b);

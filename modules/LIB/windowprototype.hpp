@@ -202,7 +202,7 @@ namespace __windowprototype {
         __nexusWindow(LPCWSTR title, Vec2 resolution)
             : title(title), hInstanceV(GetModuleHandle(nullptr)), n(nullptr)
         {
-            auto pClassName = L"hw3dbutts";
+            auto pClassName = L"hw3dbutts"; // ok what is this supposed to mean?!
             FreeConsole();
             this->wc = {0};
             this->wc.cbSize = sizeof(this->wc);
